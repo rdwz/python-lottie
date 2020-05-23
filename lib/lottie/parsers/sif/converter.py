@@ -1,7 +1,9 @@
 import math
+from collections import namedtuple
 from ... import objects
 from . import api, ast
 from ... import NVector, PolarVector
+from ...utils.transform import TransformMatrix
 
 try:
     from ...utils import font
@@ -12,6 +14,27 @@ except ImportError:
 
 def convert(canvas: api.Canvas):
     return Converter().convert(canvas)
+
+
+class BoneTransform:
+    Snapshot = namedtuple("Snapshot", ["time", "origin", "angle", "scalelx", "scalex"])
+
+    def __init__(self):
+        self.snapshots = []
+        self.cache = {}
+
+    def add_snapshot(self, snapshot: Snapshot):
+        self.snapshots.append(snapshot)
+
+    def closest(self, time):
+        if time <= self.snapshots[0].time:
+            return self.snapshots[0]
+        if time >= self.snapshots[-1].time:
+            return self.snapshots[-1]
+
+        for i in range(1, len(self.snapshots)):
+            if self.snapshots[i].time > time:
+                return self.snapshots[i-1]
 
 
 class Converter:
@@ -34,6 +57,7 @@ class Converter:
         self.view_p2 = NVector(canvas.view_box[2], canvas.view_box[3])
         self.target_size = NVector(canvas.width, canvas.height)
         self.shape_layer = self.animation.add_layer(objects.ShapeLayer())
+        self._bone_matrices = {}
         self._process_layers(canvas.layers, self.shape_layer)
         return self.animation
 
@@ -80,6 +104,51 @@ class Converter:
         )
         return shape
 
+    def _bone_transform(self, bone):
+        if bone not in self._bone_matrices:
+            transform = BoneTransform()
+            tgso = self._adjust_coords(self._convert_vector(bone.origin))
+            tgsa = self._adjust_angle(self._convert_scalar(bone.angle))
+            tgsscalelx = self._convert_scalar(bone.scalelx)
+            tgsscalex = self._convert_scalar(bone.scalex)
+            for vals in self._mix_animations(tgso, tgsa, tgsscalelx, tgsscalex):
+                transform.add_snapshot(BoneTransform.Snapshot(*vals))
+            self._bone_matrices[bone] = transform
+        else:
+            transform = self._bone_matrices[bone]
+
+        return transform
+
+    def _bone_transform_keyframes(self, bone):
+        if not isinstance(bone, api.Bone):
+            return set()
+
+        return set(s.time for s in self._bone_transform(bone).snapshots) | self._bone_transform_keyframes(bone.parent)
+
+    def _bone_transform_snapshot(self, bone, time, child_origin=None):
+        if not isinstance(bone, api.Bone):
+            return TransformMatrix()
+
+        transform = self._bone_transform(bone)
+        if time in transform.cache:
+            matrix = transform.cache[time].clone()
+        else:
+            snapshot = transform.closest(time)
+            matrix = self._bone_transform_snapshot(bone.parent, time, snapshot.origin)
+            matrix.rotate(snapshot.angle / 180 * math.pi)
+            matrix.scale(snapshot.scalex, 1)
+
+            transform.cache[time] = matrix.clone()
+
+        if child_origin:
+            matrix.translate(child_origin.x * snapshot.scalelx, child_origin.y)
+
+        return matrix
+
+    def _bone_animated_transform(self, bone):
+        for time in sorted(self._bone_transform_keyframes(bone)):
+            yield time, self._bone_transform_snapshot(bone, time)
+
     def _convert_transform(self, sif_transform: api.AbstractTransform, lottie_transform: objects.Transform):
         if isinstance(sif_transform, api.BoneLinkTransform):
             base_transform = sif_transform.base_value
@@ -96,39 +165,29 @@ class Converter:
         lottie_transform.skew_axis = self._adjust_angle(self._convert_scalar(base_transform.skew_angle))
 
         if isinstance(sif_transform, api.BoneLinkTransform):
-            lottie_transform.position = position
-            lottie_transform.rotation = rotation
-            lottie_transform.scale = scale
-            #bone = sif_transform.bone
-            #b_pos = self._adjust_coords(self._convert_vector(bone.origin))
-            #old_anchor = lottie_transform.anchor_point
+            #lottie_transform.position = position
+            #lottie_transform.rotation = rotation
+            #lottie_transform.scale = scale
 
-            #if sif_transform.translate:
-                #self._mix_animations_into(
-                    #[position, b_pos, old_anchor],
-                    #lottie_transform.position,
-                    #lambda base_p, bone_p, anchor: (anchor-self.target_size/2)/2+self.target_size/2
-                #)
-            #else:
-                #lottie_transform.position = position
+            ap = lottie_transform.anchor_point.value
+            lottie_transform.anchor_point.value = NVector(0, 0)
 
-            #lottie_transform.anchor_point = b_pos
-            #lottie_transform.anchor_point.value += NVector(100,0)
+            for time, matrix in self._bone_animated_transform(sif_transform.bone):
+                base_matrix = TransformMatrix()
+                base_pos = position.get_value(time)
+                base_scale = scale.get_value(time)
+                base_matrix.translate(base_pos.x, base_pos.y)
+                base_matrix.scale(base_scale.x / 100, base_scale.y / 100)
+                base_matrix.rotation(math.radians(rotation.get_value(time)))
 
-            #if sif_transform.rotate:
-                #b_rot = self._convert_scalar(bone.angle)
-                #self._mix_animations_into([rotation, b_rot], lottie_transform.rotation, lambda a, b: a-b)
-            #else:
-                #lottie_transform.rotation = rotation
+                matrix *= base_matrix
+                trans = matrix.extract_transform()
 
-            #if sif_transform.scale_y:
-                #b_scale = self._convert_scalar(bone.scalelx)
-                #self._mix_animations_into(
-                    #scale, b_scale, lottie_transform.scale,
-                    #lambda a, b: NVector(a.x, a.y * b)
-                #)
-            #else:
-                #lottie_transform.scale = scale
+                lottie_transform.position.add_keyframe(time, trans["translation"])
+                lottie_transform.skew_axis.add_keyframe(time, math.degrees(trans["skew_axis"]))
+                lottie_transform.skew.add_keyframe(time, -math.degrees(trans["skew_angle"]))
+                lottie_transform.rotation.add_keyframe(time, math.degrees(trans["angle"]))
+                lottie_transform.scale.add_keyframe(time, trans["scale"] * 100.)
         else:
             lottie_transform.position = position
             lottie_transform.rotation = rotation
@@ -201,7 +260,7 @@ class Converter:
 
     def _convert_circle(self, layer: api.CircleLayer):
         shape = objects.Ellipse()
-        shape.position = self._adjust_coords(self._convert_vector(layer.origin))
+        shape.position = self._convert_coord_vector(layer.origin)
         radius = self._adjust_scalar(self._convert_scalar(layer.radius))
         shape.size = self._adjust_add_dimension(radius, lambda x: NVector(x, x) * 2)
         return shape
@@ -268,6 +327,19 @@ class Converter:
 
     def _convert_vector(self, v: ast.SifAstNode):
         return self._convert_animatable(v, objects.MultiDimensional())
+
+    def _convert_coord_vector(self, v: ast.SifAstNode):
+        if isinstance(v, ast.SifAstBoneLink):
+            base = self._convert_coord_vector(v.base_value)
+            print(base)
+            animated = objects.MultiDimensional()
+            for time, matrix in self._bone_animated_transform(v.bone):
+                print((time, matrix.apply(base.get_value(time))))
+                animated.add_keyframe(time, matrix.apply(base.get_value(time)))
+            print("")
+            return animated
+        else:
+            return self._adjust_coords(self._convert_vector(v))
 
     def _convert_scalar(self, v: ast.SifAstNode):
         return self._convert_animatable(v, objects.Value())
