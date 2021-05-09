@@ -623,7 +623,7 @@ class FallbackFontRenderer(FontRenderer):
         for i, font in enumerate(fonts.all(self.query.clone().char(char))):
             # For some reason fontconfig sometimes returns a font that doesn't
             # actually contain the glyph
-            if name in font.font.glyphset or codepoint in font.cmap:
+            if name in font.font.glyphset or codepoint in font.font.cmap:
                 self._fallback[char] = font
                 return font
 
