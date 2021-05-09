@@ -7,6 +7,7 @@ from ... import objects
 from ...nvector import NVector
 from ...utils import restructure
 from ...utils.transform import TransformMatrix
+from ...parsers import glaxnimate_helpers
 try:
     from ...utils import font
     has_font = True
@@ -713,7 +714,11 @@ def color_to_css(color):
     return "rgb(%s, %s, %s)" % tuple(map(lambda c: int(round(c*255)), color[:3]))
 
 
-def to_svg(animation, time):
+def to_svg(animation, time, animated=False):
+    if glaxnimate_helpers.has_glaxnimate and animated:
+        data = glaxnimate_helpers.convert(animation, "svg")
+        return ElementTree.ElementTree(ElementTree.fromstring(data.decode("utf8")))
+
     builder = SvgBuilder(time)
     builder.process(animation)
     return builder.dom
