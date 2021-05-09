@@ -663,15 +663,23 @@ class EmojiRenderer(FontRenderer):
     def font(self):
         return self.wrapped.font
 
+    def _get_svg_filename(self, char):
+        basename = "-".join("%x" % ord(cp) for cp in char) + ".svg"
+        filename = os.path.join(self.emoji_dir, basename)
+        if os.path.isfile(filename):
+            return basename, filename
+        if char[-1] == '\ufe0f':
+            return self._get_svg_filename(char[:-1])
+        return None, None
+
     def _get_svg(self, char):
         from ..parsers.svg import parse_svg_file
 
         if char in self._svgs:
             return self._svgs[char]
 
-        basename = "-".join("%x" % ord(cp) for cp in char) + ".svg"
-        filename = os.path.join(self.emoji_dir, basename)
-        if not os.path.isfile(filename):
+        basename, filename = self._get_svg_filename(char)
+        if filename is None:
             self._svgs[char] = None
             return None
 
