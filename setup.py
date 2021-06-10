@@ -34,10 +34,11 @@ else:
         version = vf.read().strip()
 
 extras_require = {
-    "trace": ["pillow", "pypotrace>=0.2", "numpy", "scipy"],
+    "trace": ["glaxnimate", "pillow"],
     "images": ["pillow"],
-    "PNG": ["cairosvg"],
-    "GIF": ["cairosvg", "pillow"],
+    "PNG": ["glaxnimate"],
+    "PDF": ["cairosvg"],
+    "GIF": ["glaxnimate", "pillow"],
     "text": ["fonttools"],
     "video": ["opencv-python", "pillow", "numpy"],
     "emoji": ["grapheme"],

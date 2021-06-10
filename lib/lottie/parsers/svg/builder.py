@@ -715,8 +715,12 @@ def color_to_css(color):
 
 
 def to_svg(animation, time, animated=False):
-    if glaxnimate_helpers.has_glaxnimate and animated:
+    if animated:
         data = glaxnimate_helpers.convert(animation, "svg")
+        return ElementTree.ElementTree(ElementTree.fromstring(data.decode("utf8")))
+
+    if glaxnimate_helpers.has_glaxnimate:
+        data = glaxnimate_helpers.serialize(animation, "svg")
         return ElementTree.ElementTree(ElementTree.fromstring(data.decode("utf8")))
 
     builder = SvgBuilder(time)

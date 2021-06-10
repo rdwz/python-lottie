@@ -3,6 +3,7 @@
  * Optional glaxnimate integration
  * Animated SVG output
  * Improved Emoji detection
+ * Improved vectorization
 
 ## 0.6.7 - 2021-03-23
  * Improved text layer support

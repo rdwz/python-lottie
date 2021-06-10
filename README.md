@@ -232,12 +232,13 @@ follows a table listing dependencies and features
 | Packages                                      | Extra | Feature                                                   |
 |-----------------------------------------------|-------|-----------------------------------------------------------|
 | `pillow`                                      | images| To load image assets                                      |
-| `cairosvg`                                    | PNG   | To export PNG / PDF / PS                                  |
-| `cairosvg`, `pillow`                          | GIF   | To export GIF and animated WebP                           |
+| `glaxnimate`                                  | PNG   | To export PNG                                             |
+| `cairosvg`                                    | PDF   | To export PNG / PDF / PS                                  |
+| `glaxnimate`, `pillow`                        | GIF   | To export GIF and animated WebP                           |
 | `fonttools`                                   | text  | To render text as shapes                                  |
 | `grapheme`                                    | emoji | Adding emoji support to text rendering                    |
 | `cairosvg`, `numpy`, Python OpenCV 2          | video | To export video                                           |
-| `pillow`, `pypotrace>=0.2`, `numpy`, `scipy`  | trace | To convert raster images into vectors                     |
+| `glaxnimate`                                  | trace | To convert raster images into vectors                     |
 | `QScintilla`                                  | GUI   | Grafical user interface utilities                         |
 | `coverage`                                    |       | To show unit test coverage, used optionally by `test.sh`  |
 
