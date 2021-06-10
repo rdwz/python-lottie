@@ -80,9 +80,7 @@ class Vectorizer:
                 group.name = "color_%s" % color.name
                 layer._max_verts[group.name] = 0
                 fcol = glaxnimate_helpers.color_from_glaxnimate(color)
-                fill = group.add_shape(objects.Fill(NVector(*fcol)))
-                #if len(fcol) > 3 and fcol[3] < 1:
-                    #fill.opacity.value = fcol[3] * 100
+                group.add_shape(objects.Fill(NVector(*fcol)))
         return layer
 
     def raster_to_layer(self, animation, raster, layer_name=None, mode=QuanzationMode.Nearest):

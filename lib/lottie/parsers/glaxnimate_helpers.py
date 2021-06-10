@@ -32,5 +32,3 @@ def color_from_glaxnimate(color):
 
 def point_from_glaxnimate(point):
     return Point(point.x, point.y)
-
-
