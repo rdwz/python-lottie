@@ -152,24 +152,24 @@ def parse_color(color, current_color=Color(0, 0, 0, 1)):
     if match:
         return Color(int(match[1])/255, int(match[2])/255, int(match[3])/255, 1)
     # rgb(60%, 30%, 20%)
-    match = re.match(r"^rgb\s*\(\s*([0-9]+)%\s*,\s*([0-9]+)%\s*,\s*([0-9]+)%\s*\)$", color)
+    match = re.match(r"^rgb\s*\(\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*\)$", color)
     if match:
-        return Color(int(match[1])/100, int(match[2])/100, int(match[3])/100, 1)
+        return Color(float(match[1])/100, float(match[2])/100, float(match[3])/100, 1)
     # rgba(60%, 30%, 20%, 0.7)
-    match = re.match(r"^rgba\s*\(\s*([0-9]+)%\s*,\s*([0-9]+)%\s*,\s*([0-9]+)%\s*,\s*([0-9.eE]+)\s*\)$", color)
+    match = re.match(r"^rgba\s*\(\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)\s*\)$", color)
     if match:
-        return Color(int(match[1])/100, int(match[2])/100, int(match[3])/100, float(match[4]))
+        return Color(float(match[1])/100, float(match[2])/100, float(match[3])/100, float(match[4]))
     # transparent
     if color == "transparent":
         return Color(0, 0, 0, 0)
     # hsl(60, 30%, 20%)
-    match = re.match(r"^hsl\s*\(\s*([0-9]+)\s*,\s*([0-9]+)%\s*,\s*([0-9]+)%\s*\)$", color)
+    match = re.match(r"^hsl\s*\(\s*([0-9.eE]+)\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*\)$", color)
     if match:
-        return Color(*(colorsys.hls_to_rgb(int(match[1])/360, int(match[3])/100, int(match[2])/100) + (1,)))
+        return Color(*(colorsys.hls_to_rgb(float(match[1])/360, float(match[3])/100, float(match[2])/100) + (1,)))
     # hsla(60, 30%, 20%, 0.7)
-    match = re.match(r"^hsla\s*\(\s*([0-9]+)\s*,\s*([0-9]+)%\s*,\s*([0-9]+)%\s*,\s*([0-9.eE]+)\s*\)$", color)
+    match = re.match(r"^hsla\s*\(\s*([0-9.eE]+)\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)%\s*,\s*([0-9.eE]+)\s*\)$", color)
     if match:
-        return Color(*(colorsys.hls_to_rgb(int(match[1])/360, int(match[3])/100, int(match[2])/100) + (float(match[4]),)))
+        return Color(*(colorsys.hls_to_rgb(float(match[1])/360, float(match[3])/100, float(match[2])/100) + (float(match[4]),)))
     # currentColor
     if color in {"currentColor", "inherit"}:
         return current_color.clone()
