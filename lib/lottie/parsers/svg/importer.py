@@ -589,10 +589,18 @@ class SvgParser(SvgHandler):
 
     def _parseshape_anim_line(self, group, element, animations):
         line = group.shapes[0]
+
         self._merge_animations(element, animations, "x1", "y1", "p1")
         self._merge_animations(element, animations, "x2", "y2", "p2")
-        self._apply_animations(line.vertices[0], "p1", animations)
-        self._apply_animations(line.vertices[1], "p2", animations)
+
+        def combine(p1, p2):
+            shape = objects.Bezier()
+            shape.add_point(p1)
+            shape.add_point(p2)
+            return shape
+
+        self._merge_animations(element, animations, "p1", "p2", "points", combine)
+        self._apply_animations(line.shape, "points", animations)
 
     def _handle_poly(self, element):
         line = objects.Path()
