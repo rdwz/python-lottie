@@ -377,8 +377,6 @@ def gpencil_to_shape(obj, parent, ro):
                     stroke_sh.color.value = NVector(*material.color[:-1])
                     stroke_sh.opacity.value = material.color[-1] * 100
 
-
-
     return gpen
 
 
