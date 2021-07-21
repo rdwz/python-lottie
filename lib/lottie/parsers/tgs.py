@@ -21,8 +21,13 @@ def open_maybe_gzipped(file, on_open):
     else:
         binfile = file
 
-    mn = binfile.read(2)
-    binfile.seek(0)
+    try:
+        binfile.seek(binfile.tell()) # Throws when not seekable
+        mn = binfile.read(2)
+        binfile.seek(0)
+    except (io.UnsupportedOperation, OSError):
+        mn = b''
+
     if mn == b'\x1f\x8b': # gzip magic number
         final_file = gzip.open(binfile, "rb")
     elif isinstance(file, io.TextIOBase):
