@@ -668,7 +668,7 @@ class EmojiRenderer(FontRenderer):
         filename = os.path.join(self.emoji_dir, basename)
         if os.path.isfile(filename):
             return basename, filename
-        if char[-1] == '\ufe0f':
+        if char and char[-1] == '\ufe0f':
             return self._get_svg_filename(char[:-1])
         return None, None
 
