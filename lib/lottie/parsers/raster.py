@@ -54,9 +54,10 @@ class RasterImage:
 
 
 class Vectorizer:
-    def __init__(self):
+    def __init__(self, stroke_width):
         self.palette = None
         self.layers = {}
+        self.stroke_width = stroke_width
 
     def _create_layer(self, animation, layer_name):
         layer = animation.add_layer(objects.ShapeLayer())
@@ -81,6 +82,8 @@ class Vectorizer:
                 layer._max_verts[group.name] = 0
                 fcol = glaxnimate_helpers.color_from_glaxnimate(color)
                 group.add_shape(objects.Fill(NVector(*fcol)))
+                if self.stroke_width > 0:
+                    group.add_shape(objects.Stroke(NVector(*fcol), self.stroke_width))
         return layer
 
     def raster_to_layer(self, animation, raster, layer_name=None, mode=QuanzationMode.Nearest):
@@ -105,14 +108,17 @@ class Vectorizer:
             tan_in = glaxnimate_helpers.point_from_glaxnimate(point.tan_in - point.pos)
             tan_out = glaxnimate_helpers.point_from_glaxnimate(point.tan_out - point.pos)
             bezier.add_point(pos, tan_in, tan_out)
+        if path.closed:
+            bezier.closed = True
         return bezier
 
 
 def raster_to_animation(filenames, n_colors=1, frame_delay=1,
                         looping=True, framerate=60, palette=[],
-                        mode=QuanzationMode.Nearest):
+                        mode=QuanzationMode.Nearest,
+                        stroke=1):
 
-    vc = Vectorizer()
+    vc = Vectorizer(stroke)
 
     def callback(animation, raster, frame):
         raster = RasterImage(raster)

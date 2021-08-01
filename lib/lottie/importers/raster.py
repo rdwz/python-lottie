@@ -18,7 +18,7 @@ except ImportError:
     ExtraOption("palette", type=parse_color, default=[], nargs="+", help="Custom palette"),
     ExtraOption(
         "mode",
-        default="embed",
+        default="trace" if raster else "embed",
         choices=["external", "embed", "pixel", "polygon"] + (["trace"] if raster else []),
         help="Vectorization mode:\n" +
         " * external : load images as linked assets\n" +
@@ -44,9 +44,16 @@ except ImportError:
         default=None,
         help="Format to store images internally when using `embed` mode"
     ),
+    ExtraOption(
+        "stroke",
+        default=1,
+        type=int,
+        help="Stroke width for output shapes"
+    ),
 ])
 def import_raster(filenames, n_colors, palette, mode, frame_delay=1,
-                  framerate=60, frame_files=[], color_mode="nearest", embed_format=None):
+                  framerate=60, frame_files=[], color_mode="nearest",
+                  embed_format=None, stroke=1):
     if not isinstance(filenames, list):
         filenames = [filenames]
     filenames = filenames + frame_files
