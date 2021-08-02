@@ -1,4 +1,4 @@
-## Unreleased
+## 0.6.8 - 2021-08-02
  * Fixed font fallback
  * Optional glaxnimate integration
  * Animated SVG output
