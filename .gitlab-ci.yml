@@ -19,6 +19,7 @@ pages:
         - make -B docs -j 4
         - mv docs/html public
     after_script:
+        - ls -l . htmlcov
         - mv htmlcov public/coverage
     artifacts:
         paths:
@@ -27,6 +28,7 @@ pages:
         - master
     dependencies:
         - test
+    needs: ["test"]
 
 test:
     stage: test
