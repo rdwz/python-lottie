@@ -609,7 +609,7 @@ class SvgParser(SvgHandler):
         line = objects.Path()
         coords = list(map(float, element.attrib["points"].replace(",", " ").split()))
         for i in range(0, len(coords), 2):
-            line.shape.value.add_point(coords[i:i+2])
+            line.shape.value.add_point(NVector(*coords[i:i+2]))
         return line
 
     def _parseshape_polyline(self, element, shape_parent, parent_style):
