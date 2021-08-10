@@ -114,12 +114,13 @@ def export_tiff(animation, fp, dpi=96):
     start = int(animation.in_point)
     end = int(animation.out_point)
     frames = []
-    for i in range(start, end+1):
-        _log_frame("TIFF", i, end)
-        file = io.BytesIO()
-        export_png(animation, file, i, dpi)
-        file.seek(0)
-        frames.append(Image.open(file))
+    with PngRenderer(animation, dpi) as renderer:
+        for i in range(start, end+1):
+            _log_frame("TIFF", i, end)
+            file = io.BytesIO()
+            renderer.serialize(i, file)
+            file.seek(0)
+            frames.append(Image.open(file))
     _log_frame("TIFF")
 
     io_progress().report_message("TIFF Writing to file...")
