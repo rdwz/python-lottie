@@ -2,7 +2,7 @@ import io
 from PIL import Image
 from PIL import features
 
-from .cairo import export_png
+from .cairo import PngRenderer
 from .base import exporter, io_progress
 from ..parsers.baseporter import ExtraOption
 
@@ -36,12 +36,13 @@ def export_gif(animation, fp, dpi=96, skip_frames=1):
     start = int(animation.in_point)
     end = int(animation.out_point)
     frames = []
-    for i in range(start, end+1, skip_frames):
-        _log_frame("GIF", i, end)
-        file = io.BytesIO()
-        export_png(animation, file, i, dpi)
-        file.seek(0)
-        frames.append(_png_gif_prepare(Image.open(file)))
+    with PngRenderer(animation, dpi) as renderer:
+        for i in range(start, end+1, skip_frames):
+            _log_frame("GIF", i, end)
+            file = io.BytesIO()
+            renderer.serialize(i, file)
+            file.seek(0)
+            frames.append(_png_gif_prepare(Image.open(file)))
     _log_frame("GIF")
 
     io_progress().report_message("GIF Writing to file...")
@@ -79,12 +80,13 @@ def export_webp(animation, fp, dpi=96, lossless=False, quality=80, method=0, ski
     start = int(animation.in_point)
     end = int(animation.out_point)
     frames = []
-    for i in range(start, end+1, skip_frames):
-        _log_frame("WebP", i, end)
-        file = io.BytesIO()
-        export_png(animation, file, i, dpi)
-        file.seek(0)
-        frames.append(Image.open(file))
+    with PngRenderer(animation, dpi) as renderer:
+        for i in range(start, end+1, skip_frames):
+            _log_frame("WebP", i, end)
+            file = io.BytesIO()
+            renderer.serialize(i, file)
+            file.seek(0)
+            frames.append(Image.open(file))
 
     _log_frame("WebP")
 

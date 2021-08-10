@@ -30,13 +30,28 @@ if glaxnimate_helpers.has_glaxnimate:
         else:
             fp.write(data)
 
+    def PngRenderer(animation, dpi):
+        return glaxnimate_helpers.GlaxnimateRenderer(animation, "raster", dpi)
+
 elif has_cairo:
     @exporter("PNG", ["png"], [], {"frame"})
     def export_png(animation, fp, frame=0, dpi=96):
         _export_cairo(cairosvg.svg2png, animation, fp, frame, dpi)
 
+    class PngRenderer:
+        def __init__(self, animation, dpi):
+            self.animation = animation
+            self.dpi = dpi
 
-if has_cairo:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a, **k):
+            return
+
+        def serialize(self, frame, file):
+            export_png(self.animation, file, frame, self.dpi)
+
     @exporter("PDF", ["pdf"], [], {"frame"})
     def export_pdf(animation, fp, frame=0, dpi=96):
         _export_cairo(cairosvg.svg2pdf, animation, fp, frame, dpi)
