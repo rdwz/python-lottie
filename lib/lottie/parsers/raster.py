@@ -37,7 +37,7 @@ class RasterImage:
         options = glaxnimate.utils.trace.TraceOptions()
 
         if codebook is None or len(codebook) == 0:
-            tracer = glaxnimate.utils.trace.Tracer(self.image)
+            tracer = glaxnimate.utils.trace.Tracer(self.image, options)
             tracer.set_target_alpha(128, False)
             return [glaxnimate.utils.Color(0, 0, 0), tracer.trace()]
 
@@ -45,7 +45,7 @@ class RasterImage:
             return list(zip(codebook, glaxnimate.utils.trace.quantize_and_trace(self.image, options, codebook)))
 
         mono_data = []
-        tracer = glaxnimate.utils.trace.Tracer(self.image)
+        tracer = glaxnimate.utils.trace.Tracer(self.image, options)
         for color in codebook:
             tracer.set_target_color(color, 100)
             mono_data.append((color, tracer.trace()))
@@ -69,21 +69,14 @@ class Vectorizer:
     def prepare_layer(self, animation, layer_name=None):
         layer = self._create_layer(animation, layer_name)
         layer._max_verts = {}
-        if self.palette is None:
+        for color in self.palette:
             group = layer.add_shape(objects.Group())
-            group.name = "bitmap"
+            group.name = "color_%s" % color.name
             layer._max_verts[group.name] = 0
-            group.add_shape(objects.Path())
-            group.add_shape(objects.Fill(NVector(0, 0, 0)))
-        else:
-            for color in self.palette:
-                group = layer.add_shape(objects.Group())
-                group.name = "color_%s" % color.name
-                layer._max_verts[group.name] = 0
-                fcol = glaxnimate_helpers.color_from_glaxnimate(color)
-                group.add_shape(objects.Fill(NVector(*fcol)))
-                if self.stroke_width > 0:
-                    group.add_shape(objects.Stroke(NVector(*fcol), self.stroke_width))
+            fcol = glaxnimate_helpers.color_from_glaxnimate(color)
+            group.add_shape(objects.Fill(NVector(*fcol)))
+            if self.stroke_width > 0:
+                group.add_shape(objects.Stroke(NVector(*fcol), self.stroke_width))
         return layer
 
     def raster_to_layer(self, animation, raster, layer_name=None, mode=QuanzationMode.Nearest):
@@ -127,6 +120,8 @@ def raster_to_animation(filenames, n_colors=1, frame_delay=1,
                 vc.palette = [glaxnimate_helpers.color_to_glaxnimate(c) for c in palette]
             elif n_colors > 1:
                 vc.palette = raster.quantize(n_colors)
+            else:
+                vc.palette = [glaxnimate.utils.Color(0, 0, 0, 255)]
         layer = vc.raster_to_layer(animation, raster, "frame_%s" % frame, mode)
         layer.in_point = frame * frame_delay
         layer.out_point = (frame + 1) * frame_delay
