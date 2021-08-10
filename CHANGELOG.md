@@ -2,6 +2,7 @@
  * Fixed SVG viewBox parsing
  * Fixed GIF/WebP rendering
  * Fixed vectorization issues
+ * Emoji SVG filenames can be upper case
 
 ## 0.6.8 - 2021-08-02
  * Fixed font fallback

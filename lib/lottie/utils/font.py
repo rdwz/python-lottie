@@ -664,12 +664,20 @@ class EmojiRenderer(FontRenderer):
         return self.wrapped.font
 
     def _get_svg_filename(self, char):
-        basename = "-".join("%x" % ord(cp) for cp in char) + ".svg"
-        filename = os.path.join(self.emoji_dir, basename)
+        basename = "-".join("%x" % ord(cp) for cp in char)
+        suffix = ".svg"
+
+        filename = os.path.join(self.emoji_dir, basename + suffix)
         if os.path.isfile(filename):
             return basename, filename
+
+        filename = os.path.join(self.emoji_dir, basename.upper() + suffix)
+        if os.path.isfile(filename):
+            return basename, filename
+
         if char and char[-1] == '\ufe0f':
             return self._get_svg_filename(char[:-1])
+
         return None, None
 
     def _get_svg(self, char):
