@@ -1,8 +1,9 @@
-## Unreleased
+## 0.6.9 - 2021-08-10
  * Fixed SVG viewBox parsing
  * Fixed GIF/WebP rendering
  * Fixed vectorization issues
  * Emoji SVG filenames can be upper case
+ * Fixed loading SVG polyline
 
 ## 0.6.8 - 2021-08-02
  * Fixed font fallback
