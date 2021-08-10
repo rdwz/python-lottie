@@ -1,3 +1,6 @@
+## Unreleased
+ * Fixed SVG viewBox parsing
+
 ## 0.6.8 - 2021-08-02
  * Fixed font fallback
  * Optional glaxnimate integration

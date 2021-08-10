@@ -218,6 +218,9 @@ class SvgParser(SvgHandler):
             return element.attrib.get("id")
         return None
 
+    def _parse_viewbox(self, attrib):
+        return map(float, attrib.replace(",", " ").split())
+
     def parse_etree(self, etree, layer_frames=0, *args, **kwargs):
         animation = objects.Animation(*args, **kwargs)
         self.animation = animation
@@ -232,7 +235,7 @@ class SvgParser(SvgHandler):
             animation.width = int(round(self._parse_unit(svg.attrib["width"])))
             animation.height = int(round(self._parse_unit(svg.attrib["height"])))
         else:
-            _, _, animation.width, animation.height = map(int, svg.attrib["viewBox"].split(" "))
+            _, _, animation.width, animation.height = self._parse_viewbox(svg.attrib["viewBox"])
         animation.name = self._get_name(svg, self.qualified("sodipodi", "docname"))
 
         if layer_frames:
@@ -276,7 +279,7 @@ class SvgParser(SvgHandler):
 
     def _fix_viewbox(self, svg, layers):
         if "viewBox" in svg.attrib:
-            vbx, vby, vbw, vbh = map(float, svg.attrib["viewBox"].split())
+            vbx, vby, vbw, vbh = self._parse_viewbox(svg.attrib["viewBox"])
             if vbx != 0 or vby != 0 or vbw != self.animation.width or vbh != self.animation.height:
                 for layer in layers:
                     layer.transform.position.value = -NVector(vbx, vby)
