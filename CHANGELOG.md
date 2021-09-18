@@ -1,3 +1,6 @@
+## 0.6.10 - 2021-09-18
+ * Glaxnimate compatibility
+
 ## 0.6.9 - 2021-08-10
  * Fixed SVG viewBox parsing
  * Fixed GIF/WebP rendering

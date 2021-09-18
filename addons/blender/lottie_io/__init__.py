@@ -27,7 +27,7 @@ bl_info = {
     "name": "Lottie/TGS export",
     "description": "Exports Lottie or Telegram animated stickers from blender",
     "author": "Mattia Basaglia",
-    "version": (0, 6, 7),
+    "version": (0, 6, 10),
     "blender": (2, 80, 0),
     "location": "File > Export",
     "wiki_url": "https://mattbas.gitlab.io/python-lottie/index.html",
