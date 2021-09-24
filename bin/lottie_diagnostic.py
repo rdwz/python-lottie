@@ -27,3 +27,9 @@ print("* Python version: %s" % sys.version.replace("\n", " "))
 print("* Python Lottie version: %s" % __version__)
 print_loader(importers, "Importers")
 print_loader(exporters, "Exporters")
+
+try:
+    import glaxnimate
+    print("* Glaxnimate rendering available")
+except ImportError:
+    pass
