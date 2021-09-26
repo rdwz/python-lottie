@@ -7,25 +7,27 @@ from ..objects.shapes import Group, Fill
 
 
 class FancyStyle:
-    def __init__(self, font: FontStyle, color: NVector, font_size: float, offset: NVector, scale: NVector):
+    def __init__(self, font: FontStyle, color: NVector, font_size: float, offset: NVector, scale: NVector, rotation: float):
         self.font = font
         self.color = color.clone()
         self.font_size = font_size
         self.offset = offset.clone()
         self.scale = scale.clone()
+        self.rotation = rotation
 
     def clone(self):
-        return FancyStyle(self.font, self.color, self.font_size, self.offset, self.scale)
+        return FancyStyle(self.font, self.color, self.font_size, self.offset, self.scale, self.rotation)
 
     def render(self, text, pos, start_x):
         pos += self.offset
         g = self.font.renderer.render(text, self.font_size, pos, True, start_x)
         g.add_shape(Fill(self.color))
-        if self.scale.x != 1 or self.scale.y != 1:
+        if self.scale.x != 1 or self.scale.y != 1 or self.rotation != 0:
             center = g.bounding_box().center()
             g.transform.anchor_point.value = center
             g.transform.position.value += center
             g.transform.scale.value = self.scale * 100
+            g.transform.rotation.value = self.rotation
         pos -= self.offset
         return g
 
@@ -39,12 +41,20 @@ class FancyTextRenderer:
         self.default_color = default_color
         self.groups = []
 
+    @staticmethod
+    def _int_arg(value, default=0):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+
     def render(self, text: str, pos: NVector = None):
         if pos is None:
             pos = NVector(0, 0)
 
         line_start = pos.x
-        style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0), NVector(1, 1))
+        default_style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0), NVector(1, 1), 0)
+        style = default_style.clone()
         container = Group()
         last_pos = 0
 
@@ -81,19 +91,20 @@ class FancyTextRenderer:
             elif command == "center":
                 style.offset.y = 0
             elif command == "clear":
-                style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0), NVector(1, 1))
+                style = default_style.clone()
             elif command == "flip":
                 style.scale.x *= -1
+            elif command == "vflip":
+                style.scale.y *= -1
             elif command == "r":
                 pos.x = line_start
             elif command == "n":
                 pos.x = line_start
                 pos.y += self.font.line_height
             elif command == "hspace":
-                try:
-                    pos.x += float(arg)
-                except (ValueError, TypeError):
-                    pass
+                pos.x += self._int_arg(arg)
+            elif command == "rot":
+                style.rotation = self._int_arg(arg)
 
             # Eat space after no argument command
             if arg is None and len(text) > last_pos and text[last_pos] == ' ':
