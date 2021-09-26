@@ -95,5 +95,3 @@ class FancyTextRenderer:
 def render_fancy_text(text: str, font: FontStyle, default_color: NVector, font_size: float, pos: NVector = None):
     renderer = FancyTextRenderer(font, default_color, font_size)
     return renderer.render(text, pos)
-
-
