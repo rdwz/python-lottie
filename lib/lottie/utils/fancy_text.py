@@ -84,6 +84,11 @@ class FancyTextRenderer:
         if last_text:
             container.add_shape(style.render(last_text, pos))
 
+        if len(container.shapes) > 1:
+            container.next_x = container.shapes[-2].next_x
+        else:
+            container.next_x = pos.x
+
         return container
 
 
