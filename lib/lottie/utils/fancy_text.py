@@ -7,19 +7,25 @@ from ..objects.shapes import Group, Fill
 
 
 class FancyStyle:
-    def __init__(self, font: FontStyle, color: NVector, font_size: float, offset: NVector):
+    def __init__(self, font: FontStyle, color: NVector, font_size: float, offset: NVector, scale: NVector):
         self.font = font
         self.color = color.clone()
         self.font_size = font_size
         self.offset = offset.clone()
+        self.scale = scale.clone()
 
     def clone(self):
-        return FancyStyle(self.font, self.color, self.font_size, self.offset)
+        return FancyStyle(self.font, self.color, self.font_size, self.offset, self.scale)
 
     def render(self, text, pos):
         pos += self.offset
         g = self.font.renderer.render(text, self.font_size, pos)
         g.add_shape(Fill(self.color))
+        if self.scale.x != 1 or self.scale.y != 1:
+            center = g.bounding_box().center()
+            g.transform.anchor_point.value = center
+            g.transform.position.value += center
+            g.transform.scale.value = self.scale * 100
         pos -= self.offset
         return g
 
@@ -37,7 +43,8 @@ class FancyTextRenderer:
         if pos is None:
             pos = NVector(0, 0)
 
-        style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0))
+        line_start = pos.x
+        style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0), NVector(1, 1))
         container = Group()
         last_pos = 0
 
@@ -74,7 +81,16 @@ class FancyTextRenderer:
             elif command == "center":
                 style.offset.y = 0
             elif command == "clear":
-                style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0))
+                style = FancyStyle(self.font, self.default_color, self.font_size, NVector(0, 0), NVector(1, 1))
+            elif command == "flip":
+                style.scale.x *= -1
+            elif command == "r":
+                pos.x = line_start
+            elif command == "hspace":
+                try:
+                    pos.x += float(arg)
+                except ValueError:
+                    pass
 
             # Eat space after no argument command
             if arg is None and len(text) > last_pos and text[last_pos] == ' ':
