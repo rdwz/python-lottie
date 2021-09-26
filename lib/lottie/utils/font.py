@@ -511,7 +511,7 @@ class FontRenderer:
             return True
         return False
 
-    def render(self, text, size, pos=None, use_kerning=True):
+    def render(self, text, size, pos=None, use_kerning=True, start_x=None):
         """!
         Renders some text
 
@@ -519,6 +519,7 @@ class FontRenderer:
         @param size         Font size (in pizels)
         @param[in,out] pos  Text position
         @param use_kerning  Whether to honour kerning info from the font file
+        @param start_x      x-position of the start of a line
 
         @returns a Group shape, augmented with some extra attributes:
         - line_height   Line height
@@ -530,7 +531,7 @@ class FontRenderer:
         group.name = text
         if pos is None:
             pos = NVector(0, 0)
-        start_x = pos.x
+        start_x = pos.x if start_x is None else start_x
         line = Group()
         group.add_shape(line)
         #group.transform.scale.value = NVector(100, 100) * scale

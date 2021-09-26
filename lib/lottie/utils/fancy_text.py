@@ -17,9 +17,9 @@ class FancyStyle:
     def clone(self):
         return FancyStyle(self.font, self.color, self.font_size, self.offset, self.scale)
 
-    def render(self, text, pos):
+    def render(self, text, pos, start_x):
         pos += self.offset
-        g = self.font.renderer.render(text, self.font_size, pos)
+        g = self.font.renderer.render(text, self.font_size, pos, True, start_x)
         g.add_shape(Fill(self.color))
         if self.scale.x != 1 or self.scale.y != 1:
             center = g.bounding_box().center()
@@ -52,7 +52,7 @@ class FancyTextRenderer:
             prev_text = text[last_pos:match.start()]
             last_pos = match.end()
             if prev_text:
-                container.add_shape(style.render(prev_text, pos))
+                container.add_shape(style.render(prev_text, pos, line_start))
 
             style = style.clone()
 
@@ -86,10 +86,13 @@ class FancyTextRenderer:
                 style.scale.x *= -1
             elif command == "r":
                 pos.x = line_start
+            elif command == "n":
+                pos.x = line_start
+                pos.y += self.font.line_height
             elif command == "hspace":
                 try:
                     pos.x += float(arg)
-                except ValueError:
+                except (ValueError, TypeError):
                     pass
 
             # Eat space after no argument command
@@ -98,7 +101,7 @@ class FancyTextRenderer:
 
         last_text = text[last_pos:]
         if last_text:
-            container.add_shape(style.render(last_text, pos))
+            container.add_shape(style.render(last_text, pos, line_start))
 
         if len(container.shapes) > 1:
             container.next_x = container.shapes[-2].next_x
