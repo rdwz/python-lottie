@@ -62,7 +62,7 @@ class FancyTextRenderer:
             prev_text = text[last_pos:match.start()]
             last_pos = match.end()
             if prev_text:
-                container.add_shape(style.render(prev_text, pos, line_start))
+                container.insert_shape(0, style.render(prev_text, pos, line_start))
 
             style = style.clone()
 
@@ -112,7 +112,7 @@ class FancyTextRenderer:
 
         last_text = text[last_pos:]
         if last_text:
-            container.add_shape(style.render(last_text, pos, line_start))
+            container.insert_shape(0, style.render(last_text, pos, line_start))
 
         if len(container.shapes) > 1:
             container.next_x = container.shapes[-2].next_x
