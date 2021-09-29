@@ -219,11 +219,11 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
             if doc.line_height:
                 text.attrib["line-height"] = "%s%%" % doc.line_height
             if doc.justify == objects.text.TextJustify.Left:
-                text.attrib["text-align"] = "start"
+                text.attrib["text-anchor"] = "start"
             elif doc.justify == objects.text.TextJustify.Center:
-                text.attrib["text-align"] = "center"
+                text.attrib["text-anchor"] = "middle"
             elif doc.justify == objects.text.TextJustify.Right:
-                text.attrib["text-align"] = "end"
+                text.attrib["text-anchor"] = "end"
 
             text.attrib["fill"] = color_to_css(doc.color)
             text.text = doc.text
