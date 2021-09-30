@@ -63,6 +63,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
         self.precomp_times = []
         self._precomps = {}
         self._assets = {}
+        self._fonts = {}
         self._current_layer = []
 
     @property
@@ -223,22 +224,17 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
 
         return g
 
-    def _fill_text_by_font_alias(self, text: objects.text, font_name_alias: str):
-        for layer in self._current_layer[::-1][1:]: # in reverse order, and skip current layer
-            if not isinstance(layer, objects.Animation):
-                continue
-            for font in layer.fonts.list:
-                if font.name == font_name_alias:
-                    text.attrib["font-family"] = font.font_family
-                    #text.attrib["font-style"] = 'normal' # possible values: 'italic', 'oblique'
-                    text.attrib["font-weight"] = str(_supported_font_weights.get(font.font_style, 400))
-                    return
+    def _on_font(self, font):
+        self._fonts[font.name] = {
+            "font-family": font.font_family,
+            "font-weight": str(_supported_font_weights.get(font.font_style, 400)),
+        }
 
     def _on_text_layer(self, g, lot):
         text = ElementTree.SubElement(g, "text")
         doc = lot.data.get_value(self.time)
         if doc:
-            self._fill_text_by_font_alias(text, doc.font_family)
+            text.attrib.update(self._fonts.get(doc.font_family, {}))
             text.attrib["font-size"] = str(doc.font_size)
             if doc.line_height:
                 text.attrib["line-height"] = "%s%%" % doc.line_height
