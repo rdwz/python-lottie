@@ -12,13 +12,6 @@ from .base import exporter
 from .svg import export_svg
 
 
-def _export_cairo(func, animation, fp, frame, dpi):
-    intermediate = io.StringIO()
-    export_svg(animation, intermediate, frame)
-    intermediate.seek(0)
-    func(file_obj=intermediate, write_to=fp, dpi=dpi)
-
-
 if glaxnimate_helpers.has_glaxnimate:
     @exporter("PNG", ["png"], [], {"frame"})
     def export_png(animation, fp, frame=0, dpi=96):
@@ -34,6 +27,12 @@ if glaxnimate_helpers.has_glaxnimate:
         return glaxnimate_helpers.GlaxnimateRenderer(animation, "raster", dpi)
 
 elif has_cairo:
+    def _export_cairo(func, animation, fp, frame, dpi):
+        intermediate = io.BytesIO()
+        export_svg(animation, intermediate, frame, pretty=False)
+        intermediate.seek(0)
+        func(file_obj=intermediate, write_to=fp, dpi=dpi)
+
     @exporter("PNG", ["png"], [], {"frame"})
     def export_png(animation, fp, frame=0, dpi=96):
         _export_cairo(cairosvg.svg2png, animation, fp, frame, dpi)
