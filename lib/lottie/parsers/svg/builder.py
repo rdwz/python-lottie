@@ -19,7 +19,7 @@ _supported_font_weights = {
     "Thin": 100, "Hairline": 100,
     "ExtraLight": 200, "UltraLight": 200,
     "Light": 300,
-    "Regular": 400, "Normal": 400, "Plain": 400, "Standard": 400, "Roman":  400,
+    "Regular": 400, "Normal": 400, "Plain": 400, "Standard": 400, "Roman": 400,
     "Medium": 500,
     "SemiBold": 600, "Demi": 600, "DemiBold": 600,
     "Bold": 700,
@@ -27,6 +27,7 @@ _supported_font_weights = {
     "Black": 900, "Heavy": 900,
     "ExtraBlack": 1000, "UltraBlack": 1000, "UltraHeavy": 1000,
 }
+
 
 class PrecompTime:
     def __init__(self, pcl: objects.PreCompLayer):
