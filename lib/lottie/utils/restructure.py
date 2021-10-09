@@ -98,6 +98,10 @@ class AbstractBuilder:
         for asset in animation.assets or []:
             self._on_asset(asset)
 
+        if animation.fonts and animation.fonts.list:
+            for font in animation.fonts.list:
+                self._on_font(font)
+
         for layer_builder in restructured.layers:
             self.process_layer(layer_builder, out_parent)
 
@@ -108,6 +112,9 @@ class AbstractBuilder:
         raise NotImplementedError()
 
     def _on_asset(self, asset):
+        pass
+
+    def _on_font(self, font):
         pass
 
     def process_layer(self, layer_builder, out_parent):

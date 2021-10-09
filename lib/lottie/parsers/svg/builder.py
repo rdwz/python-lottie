@@ -15,6 +15,19 @@ except ImportError:
     has_font = False
 
 
+_supported_font_weights = {
+    "Thin": 100, "Hairline": 100,
+    "ExtraLight": 200, "UltraLight": 200,
+    "Light": 300,
+    "Regular": 400, "Normal": 400, "Plain": 400, "Standard": 400, "Roman":  400,
+    "Medium": 500,
+    "SemiBold": 600, "Demi": 600, "DemiBold": 600,
+    "Bold": 700,
+    "Extra": 800, "ExtraBold": 800, "Ultra": 800, "UltraBold": 800,
+    "Black": 900, "Heavy": 900,
+    "ExtraBlack": 1000, "UltraBlack": 1000, "UltraHeavy": 1000,
+}
+
 class PrecompTime:
     def __init__(self, pcl: objects.PreCompLayer):
         self.pcl = pcl
@@ -50,6 +63,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
         self.precomp_times = []
         self._precomps = {}
         self._assets = {}
+        self._fonts = {}
         self._current_layer = []
 
     @property
@@ -210,11 +224,17 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
 
         return g
 
+    def _on_font(self, font):
+        self._fonts[font.name] = {
+            "font-family": font.font_family,
+            "font-weight": str(_supported_font_weights.get(font.font_style, 400)),
+        }
+
     def _on_text_layer(self, g, lot):
         text = ElementTree.SubElement(g, "text")
         doc = lot.data.get_value(self.time)
         if doc:
-            text.attrib["font-family"] = doc.font_family
+            text.attrib.update(self._fonts.get(doc.font_family, {}))
             text.attrib["font-size"] = str(doc.font_size)
             if doc.line_height:
                 text.attrib["line-height"] = "%s%%" % doc.line_height
