@@ -1,5 +1,6 @@
 ## Unreleased
  * Fancy text formatting renderer
+ * Added PuckerBloat support
 
 ## 0.6.10 - 2021-09-18
  * Glaxnimate compatibility

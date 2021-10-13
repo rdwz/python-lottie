@@ -822,3 +822,19 @@ class Twist(ShapeElement):
         ShapeElement.__init__(self)
         self.angle = Value(0)
         self.center = MultiDimensional(NVector(0, 0))
+
+
+## @ingroup Lottie
+class PuckerBloat(ShapeElement):
+    """
+    Interpolates the shape with its center point and bezier tangents with the opposite direction
+    """
+    _props = [
+        LottieProp("amount", "a", Value, False),
+    ]
+    ## %Shape type.
+    type = "pb"
+
+    def __init__(self):
+        ShapeElement.__init__(self)
+        self.amount = Value(0)
