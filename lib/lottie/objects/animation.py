@@ -14,6 +14,25 @@ from .composition import Composition
 
 
 ## @ingroup Lottie
+class Metadata(LottieObject):
+    """!
+    Document metadata
+    """
+    _props = [
+        LottieProp("author", "a", str, False),
+        LottieProp("keywords", "k", str, True),
+        LottieProp("description", "d", str, False),
+        LottieProp("theme_color", "c", str, False),
+    ]
+
+    def __init__(self):
+        self.author = None
+        self.keywords = None
+        self.description = None
+        self.theme_color = None
+
+
+## @ingroup Lottie
 class Animation(Composition):
     """!
     Top level object, describing the animation
