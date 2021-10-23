@@ -1,7 +1,7 @@
 import warnings
 from .base import LottieObject, LottieProp, PseudoBool, LottieEnum
 from .effects import Effect
-from .helpers import Transform, Mask
+from .helpers import Transform, Mask, VisualObject
 from .shapes import ShapeElement
 from .text import TextAnimatorData
 from .properties import Value
@@ -38,12 +38,11 @@ class MatteMode(LottieEnum):
 
 
 ## @ingroup Lottie
-class Layer(LottieObject):
+class Layer(VisualObject):
     _props = [
         LottieProp("threedimensional", "ddd", PseudoBool, False),
         LottieProp("hidden", "hd", bool, False),
         LottieProp("type", "ty", int, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("parent_index", "parent", int, False),
 
         LottieProp("stretch", "sr", float, False),
@@ -100,8 +99,6 @@ class Layer(LottieObject):
         self.out_point = None
         ## Start Time of layer. Sets the start time of the layer.
         self.start_time = 0
-        ## After Effects Layer Name. Used for expressions.
-        self.name = None
         ## List of Effects
         self.effects = None
         ## Layer Time Stretching

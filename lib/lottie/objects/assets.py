@@ -5,12 +5,15 @@ import mimetypes
 from io import BytesIO
 from .base import LottieObject, LottieProp, PseudoBool, Index
 from .layers import Layer
-from .shapes import ShapeElement
 from .composition import Composition
 
 
 ## @ingroup Lottie
 class Asset(LottieObject):
+    _props = [
+        LottieProp("id", "id", str, False),
+    ]
+
     @classmethod
     def _load_get_class(cls, lottiedict):
         if "p" in lottiedict or "u" in lottiedict:
@@ -29,7 +32,6 @@ class Image(Asset):
     _props = [
         LottieProp("height", "h", float, False),
         LottieProp("width", "w", float, False),
-        LottieProp("id", "id", str, False),
         LottieProp("image", "p", str, False),
         LottieProp("image_path", "u", str, False),
         LottieProp("is_embedded", "e", PseudoBool, False),
@@ -138,55 +140,9 @@ class Image(Asset):
 
 
 ## @ingroup Lottie
-class CharacterData(LottieObject):
-    """!
-    Character shapes
-    """
-    _props = [
-        LottieProp("shapes", "shapes", ShapeElement, True),
-    ]
-
-    def __init__(self):
-        self.shapes = []
-
-
-## @ingroup Lottie
-class Chars(LottieObject):
-    """!
-    Defines character shapes to avoid loading system fonts
-    """
-    _props = [
-        LottieProp("character", "ch", str, False),
-        LottieProp("font_family", "fFamily", str, False),
-        LottieProp("font_size", "size", float, False),
-        LottieProp("font_style", "style", str, False),
-        LottieProp("width", "w", float, False),
-        LottieProp("data", "data", CharacterData, False),
-    ]
-
-    def __init__(self):
-        ## Character Value
-        self.character = ""
-        ## Character Font Family
-        self.font_family = ""
-        ## Character Font Size
-        self.font_size = 0
-        ## Character Font Style
-        self.font_style = "" # Regular
-        ## Character Width
-        self.width = 0
-        ## Character Data
-        self.data = CharacterData()
-
-    @property
-    def shapes(self):
-        return self.data.shapes
-
-
-## @ingroup Lottie
 class Precomp(Asset, Composition):
     _props = [
-        LottieProp("id", "id", str, False),
+        LottieProp("name", "nm", str, False),
     ]
 
     def __init__(self, id="", animation=None):
@@ -196,6 +152,7 @@ class Precomp(Asset, Composition):
         self.animation = animation
         if animation:
             self.animation.assets.append(self)
+        self.name = None
 
     def _on_prepare_layer(self, layer):
         if self.animation:

@@ -2,7 +2,7 @@ from .base import LottieEnum
 
 
 ## @ingroup Lottie
-class TestBased(LottieEnum):
+class TextBased(LottieEnum):
     Characters = 1
     CharacterExcludingSpaces = 2
     Words = 3

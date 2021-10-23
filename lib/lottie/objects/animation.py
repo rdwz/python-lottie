@@ -1,8 +1,9 @@
 from .base import LottieObject, LottieProp, PseudoBool, Index
 from .layers import Layer
-from .assets import Asset, Chars, Precomp
-from .text import FontList
+from .assets import Asset, Precomp
+from .text import FontList, Chars
 from .composition import Composition
+from .helpers import VisualObject
 
 ##\defgroup Lottie Lottie
 #
@@ -20,12 +21,14 @@ class Metadata(LottieObject):
     """
     _props = [
         LottieProp("author", "a", str, False),
+        LottieProp("generator", "g", str, False),
         LottieProp("keywords", "k", str, True),
         LottieProp("description", "d", str, False),
-        LottieProp("theme_color", "c", str, False),
+        LottieProp("theme_color", "tc", str, False),
     ]
 
     def __init__(self):
+        self.generator = None
         self.author = None
         self.keywords = None
         self.description = None
@@ -33,7 +36,7 @@ class Metadata(LottieObject):
 
 
 ## @ingroup Lottie
-class Animation(Composition):
+class Animation(Composition, VisualObject):
     """!
     Top level object, describing the animation
 
@@ -46,7 +49,6 @@ class Animation(Composition):
         LottieProp("out_point", "op", float, False),
         LottieProp("width", "w", int, False),
         LottieProp("height", "h", int, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("threedimensional", "ddd", PseudoBool, False),
         LottieProp("assets", "assets", Asset, True),
         #LottieProp("comps", "comps", Animation, True),
@@ -54,6 +56,7 @@ class Animation(Composition):
         LottieProp("chars", "chars", Chars, True),
         #LottieProp("markers", "markers", Marker, True),
         #LottieProp("motion_blur", "mb", MotionBlur, False),
+        LottieProp("metadata", "meta", Metadata, False)
     ]
     _version = "5.5.2"
 
@@ -74,14 +77,13 @@ class Animation(Composition):
         self.height = 512
         ## Bodymovin Version
         self.version = self._version
-        ## Composition name
-        self.name = None
         ## source items that can be used in multiple places. Comps and Images for now.
         self.assets = [] # Image, Precomp
         ## source chars for text layers
         self.chars = None
         ## Available fonts
         self.fonts = None
+        self.metadata = None
 
     def precomp(self, name):
         for ass in self.assets:

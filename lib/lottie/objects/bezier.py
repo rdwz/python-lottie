@@ -428,6 +428,7 @@ class Bezier(LottieObject):
     def rounded(self, round_distance):
         cloned = Bezier()
         cloned.closed = self.closed
+        # value from https://spencermortensen.com/articles/bezier-circle/
         round_corner = 0.5519
 
         def _get_vt(closest_index):

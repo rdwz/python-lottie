@@ -2,6 +2,7 @@ from .base import LottieObject, LottieProp, LottieEnum
 from .properties import Value, MultiDimensional
 from ..nvector import NVector
 from .helpers import Transform
+from .shapes import ShapeElement
 
 
 ## @ingroup Lottie
@@ -170,7 +171,7 @@ class TextAnimatorData(LottieObject):
 
 ## @ingroup Lottie
 class FontPathOrigin(LottieEnum):
-    Unknown = 0
+    Local = 0
     CssUrl = 1
     ScriptUrl = 2
     FontUrl = 3
@@ -209,3 +210,49 @@ class FontList(LottieObject):
 
     def append(self, font):
         self.list.append(font)
+
+
+## @ingroup Lottie
+class CharacterData(LottieObject):
+    """!
+    Character shapes
+    """
+    _props = [
+        LottieProp("shapes", "shapes", ShapeElement, True),
+    ]
+
+    def __init__(self):
+        self.shapes = []
+
+
+## @ingroup Lottie
+class Chars(LottieObject):
+    """!
+    Defines character shapes to avoid loading system fonts
+    """
+    _props = [
+        LottieProp("character", "ch", str, False),
+        LottieProp("font_family", "fFamily", str, False),
+        LottieProp("font_size", "size", float, False),
+        LottieProp("font_style", "style", str, False),
+        LottieProp("width", "w", float, False),
+        LottieProp("data", "data", CharacterData, False),
+    ]
+
+    def __init__(self):
+        ## Character Value
+        self.character = ""
+        ## Character Font Family
+        self.font_family = ""
+        ## Character Font Size
+        self.font_size = 0
+        ## Character Font Style
+        self.font_style = "" # Regular
+        ## Character Width
+        self.width = 0
+        ## Character Data
+        self.data = CharacterData()
+
+    @property
+    def shapes(self):
+        return self.data.shapes

@@ -2,11 +2,12 @@ from .base import LottieObject, LottieProp, PseudoBool
 from .properties import Value, MultiDimensional, ColorValue
 from ..nvector import NVector
 from ..utils.color import Color
+from .helpers import VisualObject
 
 
 #5: EffectsManager,
 #11: MaskEffect,
-class EffectValue(LottieObject):
+class EffectValue(VisualObject):
     """!
     Value for an effect
     """
@@ -16,7 +17,7 @@ class EffectValue(LottieObject):
 
     _props = [
         LottieProp("effect_index", "ix", int, False),
-        #LottieProp("match_name", "mn", str, False),
+        LottieProp("match_name", "mn", str, False),
         LottieProp("name", "nm", str, False),
         LottieProp("type", "ty", int, False),
     ]
@@ -46,7 +47,7 @@ class EffectValue(LottieObject):
 
 
 ## @ingroup Lottie
-class Effect(LottieObject):
+class Effect(VisualObject):
     """!
     Layer effect
     """
@@ -56,8 +57,6 @@ class Effect(LottieObject):
 
     _props = [
         LottieProp("effect_index", "ix", int, False),
-        #LottieProp("match_name", "mn", str, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("type", "ty", int, False),
         LottieProp("effects", "ef", EffectValue, True),
     ]
@@ -66,8 +65,6 @@ class Effect(LottieObject):
     def __init__(self, *args, **kwargs):
         ## Effect Index. Used for expressions.
         self.effect_index = None
-        ## After Effect's Name. Used for expressions.
-        self.name = None
         ## Effect parameters
         self.effects = self._load_values(*args, **kwargs)
 
@@ -190,7 +187,7 @@ class EffectValueCheckbox(EffectValue):
 ## @ingroup Lottie
 ## @ingroup LottieCheck
 ## Lottie-web ignores these
-class IgnoredValue(EffectValue):
+class EffectValueIgnored(EffectValue):
     _props = [
         LottieProp("value", "v", float, False),
     ]
@@ -429,11 +426,11 @@ class ChangeToColorEffect(Effect):
         ("to_color", EffectValueColor),
         ("change", EffectValueDropDown),
         ("change_by", EffectValueDropDown),
-        ("tolerance", IgnoredValue),
+        ("tolerance", EffectValueIgnored),
         ("hue", EffectValueSlider),
         ("lightness", EffectValueSlider),
         ("saturation", EffectValueSlider),
-        ("saturation_", IgnoredValue),
+        ("saturation_", EffectValueIgnored),
         ("softness", EffectValueSlider),
         ("view_correction", EffectValueDropDown),
     ]

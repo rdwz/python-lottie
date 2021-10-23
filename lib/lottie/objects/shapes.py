@@ -2,7 +2,7 @@ import math
 from .base import LottieObject, LottieProp, LottieEnum, NVector
 from .properties import Value, MultiDimensional, GradientColors, ShapeProperty, Bezier, ColorValue
 from ..utils.color import Color
-from .helpers import Transform
+from .helpers import Transform, VisualObject
 
 
 class BoundingBox:
@@ -69,14 +69,12 @@ class BoundingBox:
 
 
 ## @ingroup Lottie
-class ShapeElement(LottieObject):
+class ShapeElement(VisualObject):
     """!
     Base class for all elements of ShapeLayer and Group
     """
     _props = [
-        #LottieProp("match_name", "mn", str, False),
         LottieProp("hidden", "hd", bool, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("type", "ty", str, False),
         LottieProp("property_index", "cix", int, False),
         LottieProp("bm", "bm", int, False),
@@ -600,9 +598,8 @@ class StrokeDashType(LottieEnum):
 
 
 ## @ingroup Lottie
-class StrokeDash(LottieObject):
+class StrokeDash(VisualObject):
     _props = [
-        LottieProp("name", "nm", str, False),
         LottieProp("type", "n", StrokeDashType, False),
         LottieProp("length", "v", Value, False),
     ]

@@ -89,7 +89,7 @@ class MaskMode(LottieEnum):
     Subtract = "s"
     Intersect = "i"
     ## @note Not in lottie web
-    Lightent = "l"
+    Lighten = "l"
     ## @note Not in lottie web
     Darken = "d"
     ## @note Not in lottie web
@@ -97,11 +97,24 @@ class MaskMode(LottieEnum):
 
 
 ## @ingroup Lottie
+class VisualObject(LottieObject):
+    _props = [
+        LottieProp("name", "nm", str, False),
+        LottieProp("match_name", "mn", str, False),
+    ]
+
+    def __init__(self):
+        # Object name
+        self.name = None
+        # Used for expression
+        self.match_name = None
+
+
+## @ingroup Lottie
 ## @todo Implement SVG/SIF I/O
-class Mask(LottieObject):
+class Mask(VisualObject):
     _props = [
         LottieProp("inverted", "inv", bool, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("shape", "pt", ShapeProperty, False),
         LottieProp("opacity", "o", Value, False),
         LottieProp("mode", "mode", MaskMode, False),
@@ -109,10 +122,9 @@ class Mask(LottieObject):
     ]
 
     def __init__(self, bezier=None):
+        super().__init__()
         ## Inverted Mask flag
         self.inverted = False
-        ## Mask name. Used for expressions and effects.
-        self.name = None
         ## Mask vertices
         self.shape = ShapeProperty(bezier)
         ## Mask opacity.
