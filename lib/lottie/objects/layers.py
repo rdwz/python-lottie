@@ -76,6 +76,7 @@ class Layer(VisualObject):
         return bool(self.masks) if getattr(self, "masks") is not None else None
 
     def __init__(self):
+        super().__init__()
         ## Transform properties
         self.transform = Transform()
         ## Auto-Orient along path AE property.

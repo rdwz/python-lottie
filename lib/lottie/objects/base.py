@@ -194,7 +194,7 @@ class LottieProp:
         elif isinstance(v, float):
             if v % 1 == 0:
                 return int(v)
-            return v #round(v, 3)
+            return v # round(v, 3)
         else:
             raise Exception("Unknown value %r" % v)
 

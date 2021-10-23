@@ -104,6 +104,7 @@ class VisualObject(LottieObject):
     ]
 
     def __init__(self):
+        super().__init__()
         # Object name
         self.name = None
         # Used for expression

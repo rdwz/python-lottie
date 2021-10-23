@@ -12,6 +12,7 @@ class Composition(LottieObject):
     ]
 
     def __init__(self):
+        super().__init__()
         ## List of Composition Layers
         self.layers = [] # ShapeLayer, SolidLayer, CompLayer, ImageLayer, NullLayer, TextLayer
 

@@ -84,11 +84,7 @@ class ShapeElement(VisualObject):
     _shape_classses = None
 
     def __init__(self):
-        # After Effect's Match Name. Used for expressions.
-        #self.match_name = ""
-
-        ## After Effect's Name. Used for expressions.
-        self.name = None
+        super().__init__()
         ## Property index
         self.property_index = None
         ## Hide element
