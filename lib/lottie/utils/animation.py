@@ -153,7 +153,7 @@ def generate_path_segment(bezier, appear_start, appear_end, disappear_start, dis
     beziers = []
     maxp = 0
 
-    # HACK: For some reson reversed works better
+    # HACK: For some reason reversed works better
     if not reverse:
         bezier.reverse()
 

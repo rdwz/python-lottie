@@ -368,7 +368,7 @@ There are several things marked as unsupported in telegram animated stickers tha
 | Ellipse                          | 👍                | 👍               | 👍      |
 | Rectangle                        | 👍                | 👍               | 👍      |
 | Rounded Rectangle                | 👍                | 👍               | 👍      |
-| Polystar                         | 👍                | 👍[^unsuported]  | 👍      |
+| Polystar                         | 👍                | 👍[^unsupported] | 👍      |
 | Group                            | 👍                | 👍               | 👍      |
 | Trim Path (individually)         | 👍                | 👍               | 👍      |
 | Trim Path (simultaneously)       | 👍                | 👍               | 👍      |
@@ -386,7 +386,7 @@ There are several things marked as unsupported in telegram animated stickers tha
 | Line Join                        | 👍                | 👍               | 👍      |
 | Miter Limit                      | 👍                | 👍               | 👍      |
 | Dashes                           | 👍                | 👍               | 👍      |
-| Gradient                         | 👍                | 👍[^unsuported]  | 👍      |
+| Gradient                         | 👍                | 👍[^unsupported] | 👍      |
 | **Transforms**                   | **python-lottie** | **Telegram**     | **SVG** |
 | Position                         | 👍                | 👍               | 👍      |
 | Position (separated X/Y)         | 👍                | 👍               | 👍      |
@@ -396,7 +396,7 @@ There are several things marked as unsupported in telegram animated stickers tha
 | Opacity                          | 👍                | 👍               | 👍      |
 | Parenting                        | 👍                | 👍               | 👍      |
 | Skew                             | 👍                | ⛔️[^bug]         | 👍      |
-| Auto Orient                      | 👍                | 👍[^unsuported]  | 👍      |
+| Auto Orient                      | 👍                | 👍[^unsupported] | 👍      |
 | **Interpolation**                | **python-lottie** | **Telegram**     | **SVG** |
 | Linear Interpolation             | 👍                | 👍               | 👍      |
 | Bezier Interpolation             | 👍                | 👍               | 👍      |
@@ -404,16 +404,16 @@ There are several things marked as unsupported in telegram animated stickers tha
 | Spatial Bezier Interpolation     | 👍                | 👍               | 👍      |
 | Rove Across Time                 | ⛔️                | ⛔️[^untested]    | ⛔️      |
 | **Masks**                        | **python-lottie** | **Telegram**     | **SVG** |
-| Mask Path                        | 👍                | 👍[^unsuported]  | 👍      |
-| Mask Opacity                     | 👍                | 👍[^unsuported]  | 👍      |
-| Add                              | 👍                | 👍[^unsuported]  | ⛔️      |
-| Subtract                         | 👍                | 👍[^unsuported]  | ⛔️      |
-| Intersect                        | 👍                | 👍[^unsuported]  | 👍      |
-| Lighten                          | 👍                | 👍[^unsuported]  | ⛔️      |
-| Darken                           | 👍                | 👍[^unsuported]  | ⛔️      |
-| Difference                       | 👍                | 👍[^unsuported]  | ⛔️      |
-| Expansion                        | 👍                | 👍[^unsuported]  | ⛔️      |
-| Feather                          | 👍                | 👍[^unsuported]  | ⛔️      |
+| Mask Path                        | 👍                | 👍[^unsupported] | 👍      |
+| Mask Opacity                     | 👍                | 👍[^unsupported] | 👍      |
+| Add                              | 👍                | 👍[^unsupported] | ⛔️      |
+| Subtract                         | 👍                | 👍[^unsupported] | ⛔️      |
+| Intersect                        | 👍                | 👍[^unsupported] | 👍      |
+| Lighten                          | 👍                | 👍[^unsupported] | ⛔️      |
+| Darken                           | 👍                | 👍[^unsupported] | ⛔️      |
+| Difference                       | 👍                | 👍[^unsupported] | ⛔️      |
+| Expansion                        | 👍                | 👍[^unsupported] | ⛔️      |
+| Feather                          | 👍                | 👍[^unsupported] | ⛔️      |
 | **Mattes**                       | **python-lottie** | **Telegram**     | **SVG** |
 | Alpha Matte                      | 👍                | ⛔️[^dok]         | 👍      |
 | Alpha Inverted Matte             | 👍                | ⛔️[^dok]         | ⛔️      |
@@ -457,16 +457,16 @@ There are several things marked as unsupported in telegram animated stickers tha
 | Time remap                       | 👍                | ⛔️[^dok]         | 👍      |
 | Markers                          | ⛔️                | ⛔️[^untested]    | ⛔️      |
 | 3D Layers                        | 👍                | ⛔️[^untested]    | ⛔️      |
-| Repeaters                        | 👍                | 👍[^unsuported]  | 👍      |
-| Solids                           | 👍                | 👍[^unsuported]  | 👍      |
+| Repeaters                        | 👍                | 👍[^unsupported] | 👍      |
+| Solids                           | 👍                | 👍[^unsupported] | 👍      |
 
 [^text]: Note that **python-lottie** offers an alternative to lottie text layers, and can render
 text as shapes, so that is supported everywhere
 
-[^untested]: Marked as unsuported but I haven't tested it
+[^untested]: Marked as unsupported but I haven't tested it
 
 [^bug]: Not listed as unsupported, maybe a bug?
 
 [^dok]: Works on telegram desktop
 
-[^unsuported]: Marked as unsupported
+[^unsupported]: Marked as unsupported
