@@ -17,21 +17,13 @@ class EffectValue(VisualObject):
 
     _props = [
         LottieProp("effect_index", "ix", int, False),
-        LottieProp("match_name", "mn", str, False),
-        LottieProp("name", "nm", str, False),
         LottieProp("type", "ty", int, False),
     ]
 
     def __init__(self):
+        super().__init__()
         ## Effect Index. Used for expressions.
         self.effect_index = None
-        ## After Effect's Name. Used for expressions.
-        self.name = None
-
-        """
-        ## After Effect's Match Name. Used for expressions.
-        self.match_name = ""
-        """
 
     @classmethod
     def _load_get_class(cls, lottiedict):
@@ -63,6 +55,7 @@ class Effect(VisualObject):
     _effects = []
 
     def __init__(self, *args, **kwargs):
+        super().__init__()
         ## Effect Index. Used for expressions.
         self.effect_index = None
         ## Effect parameters
@@ -102,7 +95,7 @@ class Effect(VisualObject):
         for i, (name, type) in enumerate(self._effects):
             if name == key:
                 return self.effects[i].value
-        return super().__getattr__(key)
+        raise AttributeError(key)
 
     def __str__(self):
         return self.name or super().__str__()
@@ -308,14 +301,14 @@ class ProLevelsEffect(Effect):
         ("comp_inwhite", EffectValueSlider),
         ("comp_gamma", EffectValueSlider),
         ("comp_outblack", EffectValueSlider),
-        ("comp_outwhite", EffectNoValue),
+        ("comp_outwhite", EffectValueSlider),
         ("08", EffectNoValue),
         ("09", EffectValueSlider),
         ("r_inblack", EffectValueSlider),
         ("r_inwhite", EffectValueSlider),
         ("r_gamma", EffectValueSlider),
         ("r_outblack", EffectValueSlider),
-        ("r_outwhite", EffectNoValue),
+        ("r_outwhite", EffectValueSlider),
         ("15", EffectValueSlider),
         ("16", EffectValueSlider),
         ("g_inblack", EffectValueSlider),
@@ -324,7 +317,7 @@ class ProLevelsEffect(Effect):
         ("g_outblack", EffectValueSlider),
         ("g_outwhite", EffectNoValue),
         ("22", EffectValueSlider),
-        ("b3", EffectValueSlider),
+        ("23", EffectValueSlider),
         ("b_inblack", EffectValueSlider),
         ("b_inwhite", EffectValueSlider),
         ("b_gamma", EffectValueSlider),
