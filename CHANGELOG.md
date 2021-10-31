@@ -144,7 +144,7 @@
  * Documentation / packaging fixes
 
 ## 0.4.0 - 2020-03-26
- * Extended Telgram sticker validation
+ * Extended Telegram sticker validation
  * Synfig importer
  * New Synfig exporter
  * Fixed some lottie effects

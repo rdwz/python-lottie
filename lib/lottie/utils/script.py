@@ -34,7 +34,7 @@ def _get_parser(caller, basename, path, formats, verbosity):
         nargs="+",
         choices=list(sum((e.extensions for e in exporters), [])),
         default=formats,
-        help="Formates to render",
+        help="Formats to render",
         metavar="format"
     )
     parser.add_argument(
