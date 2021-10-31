@@ -57,7 +57,7 @@ export class Keyframe extends LottieObject
     Imagine a quadratic bezier, with starting point at (0, 0) and end point at (1, 1).
 
     \p out_value and \p in_value are the other two handles for a quadratic bezier,
-    expressed as absoulte values in this 0-1 space.
+    expressed as absolute values in this 0-1 space.
 
     See also https://cubic-bezier.com/
     @endparblock
