@@ -281,6 +281,9 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
         return v
 
     def set_transform(self, dom, transform, auto_orient=False):
+        if not transform:
+            return
+
         mat = transform.to_matrix(self.time, auto_orient)
         dom.attrib["transform"] = mat.to_css_2d()
 
