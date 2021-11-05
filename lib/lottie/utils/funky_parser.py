@@ -252,6 +252,7 @@ class ShapeData:
         self.roundness = 0
         self.opacity = 1
         self.count = 1
+        self.stroke = None
 
 
 class Lexer:
@@ -750,11 +751,13 @@ class Parser:
     def add_shape(self, parent, shape_object, shape_data):
         g = shapes.Group()
         g.add_shape(shape_object)
+
+        if shape_data.stroke:
+            g.add_shape(shape_data.stroke)
+
         if shape_data.color:
             fill = shapes.Fill(shape_data.color)
             g.add_shape(fill)
-
-        self.stroke(g)
 
         if shape_data.opacity != 1:
             g.transform.opacity.value = 100 * shape_data.opacity
@@ -768,23 +771,6 @@ class Parser:
             g.transform.rotation.value = self.angle(0)
 
         parent.insert_shape(0, g)
-
-    def stroke(self, g):
-        pass # TODO
-
-    def shape_square(self, shape_data: ShapeData):
-        pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
-        size = NVector(shape_data.extent, shape_data.extent)
-        round_base = shape_data.extent / 5
-        shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
-
-        return shape
-
-    def shape_circle(self, shape_data: ShapeData):
-        pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
-        size = NVector(shape_data.extent, shape_data.extent)
-        shape = shapes.Ellipse(pos, size)
-        return shape
 
     def position(self, shape: shapes.Group, time: float):
         px = 0
@@ -849,6 +835,72 @@ class Parser:
             y + dy * qual,
         )
 
+    def shape_common_property(self, shape_data: ShapeData):
+        color = NVector(0, 0, 0)
+        width = 4
+
+        while True:
+            color = self.color()
+            if color:
+                continue
+
+            quant = self.size_qualifier()
+            if self.check_words("thick"):
+                self.next()
+                width *= 1.5 * quant
+                continue
+            elif self.check_words("thin"):
+                self.next()
+                width *= 0.6 / quant
+                continue
+            else:
+                break
+
+        if self.check_words("stroke", "border", "outline", "edge", "borders", "edges"):
+            self.next()
+            shape_data.stroke = shapes.Stroke(color, width)
+            return True
+
+        return False
+
+    def square_properties(self, shape_data: ShapeData, shape):
+        if self.check_words("with", "of"):
+            while True:
+                if self.check_words("with", "of"):
+                    self.next()
+
+                self.article()
+
+                if self.check_words("size"):
+                    self.next()
+                    extent = self.number(shape.outer_radius.value)
+                    shape.size.value = NVector(extent, extent)
+                elif self.shape_common_property(shape_data):
+                    pass
+                else:
+                    self.warn("Unknown property")
+                    break
+
+                if self.check_words("and"):
+                    continue
+                else:
+                    break
+
+    def shape_square(self, shape_data: ShapeData):
+        pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
+        size = NVector(shape_data.extent, shape_data.extent)
+        round_base = shape_data.extent / 5
+        shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
+        self.square_properties(shape_data, shape)
+        return shape
+
+    def shape_circle(self, shape_data: ShapeData):
+        pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
+        size = NVector(shape_data.extent, shape_data.extent)
+        shape = shapes.Ellipse(pos, size)
+        self.square_properties(shape_data, shape)
+        return shape
+
     def shape_star(self, shape_data: ShapeData, sides: int = None):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         round_base = shape_data.extent / 5
@@ -866,6 +918,8 @@ class Parser:
                 if self.check_words("with", "of"):
                     self.next()
 
+                self.article()
+
                 if self.check_words("radius"):
                     self.next()
                     shape.outer_radius.value = self.number(shape.outer_radius.value)
@@ -877,10 +931,15 @@ class Parser:
                     shape.points.value = self.integer()
                     if self.require_one_of("points", "sides", "point", "side"):
                         self.next()
-                elif self.check_words("and"):
-                    continue
+                elif self.shape_common_property(shape_data):
+                    pass
                 else:
                     self.warn("Unknown property")
+                    break
+
+                if self.check_words("and"):
+                    continue
+                else:
                     break
 
         shape.inner_radius.value = shape.outer_radius.value / 2
@@ -974,8 +1033,15 @@ class Parser:
                 elif self.check_words("height"):
                     self.next()
                     height = self.number(0)
+                elif self.shape_common_property(shape_data):
+                    pass
                 else:
                     self.warn("Unknown property")
+                    break
+
+                if self.check_words("and"):
+                    continue
+                else:
                     break
 
         if width is None and height is None:
