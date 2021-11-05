@@ -769,7 +769,7 @@ class Parser:
     def shape_circle(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = NVector(shape_data.extent, shape_data.extent)
-        shape = shapes.Ellipse(pos, size, shape_data.roundness)
+        shape = shapes.Ellipse(pos, size)
         return shape
 
     def position(self, shape: shapes.Group, time: float):
