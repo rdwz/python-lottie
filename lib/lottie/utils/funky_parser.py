@@ -3,7 +3,6 @@ import sys
 import enum
 import math
 import typing
-import dataclasses
 
 from ..parsers.svg.svgdata import color_table
 from ..objects.animation import Animation
@@ -220,14 +219,22 @@ class TokenType(enum.Enum):
     Separator = enum.auto()
 
 
-@dataclasses.dataclass
 class Token:
-    type: TokenType
-    line: int
-    col: int
-    start: int
-    end: int
-    value: typing.Any = None
+    def __init__(
+        self,
+        type: TokenType,
+        line: int,
+        col: int,
+        start: int,
+        end: int,
+        value: typing.Any = None
+    ):
+        self.col = col
+        self.line = line
+        self.end = end
+        self.start = start
+        self.type = type
+        self.value = value
 
     def __repr__(self):
         if self.type == TokenType.Eof:
