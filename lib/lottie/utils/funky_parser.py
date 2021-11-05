@@ -647,17 +647,16 @@ class Parser:
 
             lexind = self.lexer.save()
             qualifier = self.size_qualifier()
-            if lexind < self.lexer.token_index:
-                if self.check_words("rounded"):
-                    shape.roundness = qualifier
-                    self.next()
-                    ok = True
-                elif self.check_words("transparent"):
-                    shape.opacity = (1 / qualifier)
-                    self.next()
-                    ok = True
-                else:
-                    self.lexer.restore(lexind)
+            if self.check_words("rounded"):
+                shape.roundness = qualifier
+                self.next()
+                ok = True
+            elif self.check_words("transparent"):
+                shape.opacity = (1 / qualifier)
+                self.next()
+                ok = True
+            elif lexind < self.lexer.token_index:
+                self.lexer.restore(lexind)
 
             if self.check_words("star", "polygon", "ellipse", "rectangle", "circle", "square"):
                 shape_type = self.token.value
