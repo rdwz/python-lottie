@@ -82,8 +82,10 @@ color_words = {
     "gold": {"_": 1},
     "golden": {"rod": {"_": 1}},
     "gray": {"_": 1},
-    "green": {"_": 1},
-    "green": {"yellow": {"_": 1}},
+    "green": {
+        "_": 1,
+        "yellow": {"_": 1}
+    },
     "grey": {"_": 1},
     "honeydew": {"_": 1},
     "hotpink": {"_": 1},
@@ -91,7 +93,7 @@ color_words = {
     "indigo": {"_": 1},
     "ivory": {"_": 1},
     "khaki": {"_": 1},
-    "lavender":  {
+    "lavender": {
         "_": 1,
         "blush": {"_": 1},
     },
@@ -254,7 +256,8 @@ class ShapeData:
 
 class Lexer:
     expression = re.compile(
-        r'[\r\t ]*(?P<token>(?P<punc>[:,;.])|(?P<word>[a-zA-Z\']+)|(?P<number>-?[0-9]+(?P<fraction>\.[0-9]+)?)|(?P<string>"(?:[^"\\]|\\["\\nbt])+"))[\r\t ]*'
+        r'[\r\t ]*(?P<token>(?P<punc>[:,;.])|(?P<word>[a-zA-Z\']+)|' +
+        r'(?P<number>-?[0-9]+(?P<fraction>\.[0-9]+)?)|(?P<string>"(?:[^"\\]|\\["\\nbt])+"))[\r\t ]*'
     )
 
     def __init__(self, text):
@@ -931,7 +934,7 @@ class Parser:
         elif self.require_one_of("degrees"):
             self.next()
 
-        return amount
+        return amount * direction
 
     def rect_size(self, shape_data: ShapeData):
         extent = shape_data.extent
@@ -979,13 +982,11 @@ class Parser:
 
     def shape_rectangle(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
-        extent = shape_data.extent
         round_base = shape_data.extent / 5
         size = self.rect_size(shape_data)
         return shapes.Rect(pos, size, shape_data.roundness * round_base)
 
     def shape_ellipse(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
-        extent = shape_data.extent
         size = self.rect_size(shape_data)
         return shapes.Ellipse(pos, size)
