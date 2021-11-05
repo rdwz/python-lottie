@@ -840,8 +840,9 @@ class Parser:
         width = 4
 
         while True:
-            color = self.color()
-            if color:
+            got_color = self.color()
+            if got_color:
+                color = got_color
                 continue
 
             quant = self.size_qualifier()
