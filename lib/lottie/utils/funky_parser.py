@@ -321,6 +321,14 @@ class DummyLogger(Logger):
         pass
 
 
+class StorageLogger(Logger):
+    def __init__(self):
+        self.messages = []
+
+    def warn(self, message):
+        self.messages.append(message)
+
+
 class Parser:
     sides = {
         "penta": 5,
