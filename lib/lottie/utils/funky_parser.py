@@ -263,20 +263,27 @@ class Lexer:
     def __init__(self, text):
         self.text = text
         self.pos = 0
-        self.queue = []
         self.token = None
         self.line = 1
         self.line_pos = 0
+        self.tokens = []
+        self.token_index = 0
+
+    def _new_token(self, token: Token):
+        self.token = token
+        self.tokens.append(token)
+        self.token_index = len(self.tokens)
+        return token
 
     def next(self):
-        if self.queue:
-            self.token = self.queue.pop(0)
+        if self.token_index < len(self.tokens):
+            self.token = self.tokens[self.token_index]
+            self.token_index += 1
             return self.token
 
         while True:
             if self.pos >= len(self.text):
-                self.token = Token(TokenType.Eof, self.line, self.pos - self.line_pos, self.pos, self.pos)
-                return self.token
+                return self._new_token(Token(TokenType.Eof, self.line, self.pos - self.line_pos, self.pos, self.pos))
 
             if self.text[self.pos] == '\n':
                 self.line += 1
@@ -313,11 +320,21 @@ class Lexer:
                 type = TokenType.Separator
 
         self.pos = match.end("token")
-        self.token = Token(type, self.line, self.pos - self.line_pos, match.start("token"), self.pos, value)
-        return self.token
+        return self._new_token(Token(type, self.line, self.pos - self.line_pos, match.start("token"), self.pos, value))
 
-    def back(self, token=None):
-        self.queue.insert(0, token or self.token)
+    def back(self):
+        if self.token_index > 0:
+            self.restore(self.token_index - 1)
+
+    def save(self):
+        return self.token_index
+
+    def restore(self, index):
+        self.token_index = index
+        if index > 0:
+            self.token = self.tokens[self.token_index-1]
+        else:
+            self.token = self.tokens[0]
 
 
 class Logger:
@@ -409,10 +426,12 @@ class Parser:
 
     def parse(self):
         self.lottie = Animation(180, 60)
-        self.article()
-        if self.check_words("animation", "composition"):
-            self.next()
-            self.animation()
+        if self.article():
+            if self.check_words("animation", "composition"):
+                self.next()
+                self.animation()
+            else:
+                self.lexer.back()
         self.layers(self.lottie)
         if self.token.type != TokenType.Eof:
             self.warn("Extra tokens")
@@ -439,16 +458,15 @@ class Parser:
 
     def check_word_sequence(self, words):
         token = self.token
-        tokens = []
+        index = self.lexer.save()
         for word in words:
             if token.type != TokenType.Word or token.value != word:
                 break
             token = self.next()
-            tokens.insert(0, token)
         else:
             return True
 
-        self.lexer.queue = tokens + self.lexer.queue
+        self.lexer.restore(index)
         return False
 
     def properties(self, object, properties):
@@ -567,6 +585,7 @@ class Parser:
                     self.next()
                     self.layer(composition)
             elif self.article():
+                self.lexer.back()
                 self.layer(composition)
             elif self.token.type == TokenType.Number and isinstance(self.token.value, int):
                 self.layer(composition)
@@ -626,8 +645,9 @@ class Parser:
                 shape.portrait = False
                 ok = True
 
-            tokens, qualifier = self.size_qualifier()
-            if tokens:
+            lexind = self.lexer.save()
+            qualifier = self.size_qualifier()
+            if lexind < self.lexer.token_index:
                 if self.check_words("rounded"):
                     shape.roundness = qualifier
                     self.next()
@@ -637,7 +657,7 @@ class Parser:
                     self.next()
                     ok = True
                 else:
-                    self.lexer.queue = tokens + self.lexer.queue
+                    self.lexer.restore(lexind)
 
             if self.check_words("star", "polygon", "ellipse", "rectangle", "circle", "square"):
                 shape_type = self.token.value
@@ -692,30 +712,25 @@ class Parser:
 
     def size_qualifier(self):
         base = 1
-        tokens = []
+
         while True:
             if self.check_words("very", "much"):
-                tokens.insert(0, self.token)
                 self.next()
                 base *= 1.33
             elif self.check_words("extremely"):
-                tokens.insert(0, self.token)
                 self.next()
                 base *= 1.5
             elif self.check_words("incredibly"):
-                tokens.insert(0, self.token)
                 self.next()
                 base *= 2
             else:
                 break
 
-        return tokens, base
+        return base
 
     def size_multiplitier(self):
-        base = 1
-        tokens, qualifier = self.size_qualifier()
-        if qualifier:
-            base *= qualifier
+        lexind = self.lexer.save()
+        base = self.size_qualifier()
 
         if self.check_words("small"):
             self.next()
@@ -730,7 +745,7 @@ class Parser:
             self.next()
             return 1.6 * base
         else:
-            self.lexer.queue = tokens + self.lexer.queue
+            self.lexer.restore(lexind)
             return None
 
     def add_shape(self, parent, shape_object, shape_data):
@@ -776,7 +791,7 @@ class Parser:
         px = 0
         py = 0
 
-        tokens, qual = self.size_qualifier()
+        qual = self.size_qualifier()
 
         if self.check_words("to", "in", "towards"):
             self.next()
