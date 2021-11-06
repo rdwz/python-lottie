@@ -299,6 +299,11 @@ class LottieObject(LottieBase, metaclass=LottieObjectMeta):
             prop.set(obj, prop.clone_value(v))
         return obj
 
+    def clone_into(self, other):
+        for prop in self._props:
+            v = prop.get(self)
+            prop.set(other, prop.clone_value(v))
+
     def __str__(self):
         return type(self).__name__
 

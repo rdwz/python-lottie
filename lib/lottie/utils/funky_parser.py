@@ -5,6 +5,7 @@ import math
 import typing
 
 from ..parsers.svg.svgdata import color_table
+from ..parsers.svg.importer import parse_color, parse_svg_file
 from ..objects.animation import Animation
 from ..objects import layers
 from ..objects import shapes
@@ -248,12 +249,18 @@ class ShapeData:
     def __init__(self, extent):
         self.color = [0, 0, 0]
         self.extent = extent
+        self.size_multiplitier = 1
         self.portrait = False
         self.roundness = 0
         self.opacity = 1
         self.count = 1
         self.stroke = None
+        self.stroke_on_top = True
+        self.properties = {}
 
+    def scale(self, multiplier):
+        self.size_multiplitier *= multiplier
+        self.extent *= multiplier
 
 class Lexer:
     expression = re.compile(
@@ -373,6 +380,7 @@ class Parser:
         self.logger = logger
         self.allow_resize = True
         self.max_duration = None
+        self.svg_shapes = []
 
     def next(self):
         return self.lexer.next()
@@ -386,11 +394,13 @@ class Parser:
 
     def get_color_value(self, value, complete_word: str):
         if isinstance(value, str):
-            return color_table[value]
-        elif isinstance(value, list):
+            return NVector(*color_table[value])
+        elif isinstance(value, (list, tuple)):
+            return NVector(*value)
+        elif isinstance(value, NVector):
             return value
         else:
-            return color_table[complete_word]
+            return NVector(*color_table[complete_word])
 
     def complete_color(self, word_dict: dict, complete_word: str):
         if "_" in word_dict:
@@ -449,6 +459,12 @@ class Parser:
             return False
 
         return self.token.value in words
+
+    def skip_words(self, *words):
+        if self.check_words(*words):
+            self.next()
+            return True
+        return False
 
     def require_one_of(self, *words):
         if self.check_words(*words):
@@ -626,7 +642,7 @@ class Parser:
                 ok = True
                 shape.color = color
 
-            if self.check_words("transparent"):
+            if self.check_words("transparent", "invisible"):
                 self.next()
                 shape.color = None
                 ok = True
@@ -634,7 +650,7 @@ class Parser:
             size_mult = self.size_multiplitier()
             if size_mult:
                 ok = True
-                shape.extent *= size_mult
+                shape.scale(size_mult)
 
             if self.check_words("portrait"):
                 self.next()
@@ -704,6 +720,10 @@ class Parser:
                 else:
                     continue
 
+            for svg_shape in self.svg_shapes:
+                if svg_shape.match(parent, self, shape):
+                    return
+
             if not ok:
                 self.next()
                 break
@@ -752,17 +772,23 @@ class Parser:
         g = shapes.Group()
         g.add_shape(shape_object)
 
-        if shape_data.stroke:
+        if shape_data.stroke and shape_data.stroke_on_top:
             g.add_shape(shape_data.stroke)
 
         if shape_data.color:
             fill = shapes.Fill(shape_data.color)
             g.add_shape(fill)
 
+        if shape_data.stroke and not shape_data.stroke_on_top:
+            g.add_shape(shape_data.stroke)
+
         if shape_data.opacity != 1:
             g.transform.opacity.value = 100 * shape_data.opacity
 
-        center = shape_object.position.value
+        if "position" in shape_data.properties:
+            center = shape_data.properties["position"].value
+        else:
+            center = g.bounding_box(0).center()
         g.transform.position.value = self.position(g, 0) + center
         g.transform.anchor_point.value = NVector(*center)
 
@@ -771,6 +797,7 @@ class Parser:
             g.transform.rotation.value = self.angle(0)
 
         parent.insert_shape(0, g)
+        return g
 
     def position(self, shape: shapes.Group, time: float):
         px = 0
@@ -883,9 +910,13 @@ class Parser:
                     break
 
                 if self.check_words("and"):
+                    self.next()
                     continue
                 else:
                     break
+
+        shape_data.properties["position"] = shape.position
+        shape_data.properties["size"] = shape.size
 
     def shape_square(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
@@ -939,11 +970,14 @@ class Parser:
                     break
 
                 if self.check_words("and"):
+                    self.next()
                     continue
                 else:
                     break
 
         shape.inner_radius.value = shape.outer_radius.value / 2
+
+        shape_data.properties["position"] = shape.position
 
         return shape
 
@@ -1038,6 +1072,7 @@ class Parser:
                     pass
                 else:
                     self.warn("Unknown property")
+                    self.next()
                     break
 
                 if self.check_words("and"):
@@ -1065,9 +1100,130 @@ class Parser:
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         round_base = shape_data.extent / 5
         size = self.rect_size(shape_data)
-        return shapes.Rect(pos, size, shape_data.roundness * round_base)
+        shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
+        shape_data.properties["position"] = shape.position
+        shape_data.properties["size"] = shape.size
+        return shape
 
     def shape_ellipse(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = self.rect_size(shape_data)
-        return shapes.Ellipse(pos, size)
+        shape = shapes.Ellipse(pos, size)
+        shape_data.properties["position"] = shape.position
+        shape_data.properties["size"] = shape.size
+        return shape
+
+
+class SvgLoader:
+    def __init__(self):
+        self.cache = {}
+
+    def load(self, filename):
+        if filename in self.cache:
+            return self.cache[filename]
+
+        anim = parse_svg_file(filename)
+        self.cache[filename] = anim
+        return anim
+
+
+class SvgFeature:
+    def __init__(self, layer_names, colors):
+        self.layer_names = layer_names
+        self.colors = [parse_color(color) for color in colors]
+
+    def process(self, lottie_object, new_color):
+        objects = []
+        if self.layer_names:
+            for layer_name in self.layer_names:
+                found = lottie_object.find(layer_name)
+                if found:
+                    objects.append(found)
+        else:
+            objects = [lottie_object]
+
+        for object in objects:
+            for styler in object.find_all((shapes.Fill, shapes.Stroke)):
+                if len(self.colors) == 0 or styler.color.value in self.colors:
+                    styler.color.value = new_color
+
+
+class SvgShape:
+    def __init__(self, file, phrase, feature_map, main_feature, facing_direction, svg_loader: SvgLoader):
+        self.file = file
+        self.phrase = phrase
+        self.feature_map = feature_map
+        if isinstance(main_feature, str):
+            self.main_feature = feature_map[main_feature]
+        else:
+            self.main_feature = main_feature
+        self.facing_direction = facing_direction
+        self.svg_loader = svg_loader
+
+    def match(self, parent, parser: Parser, shape_data: ShapeData):
+        if not parser.check_word_sequence(self.phrase):
+            return False
+
+        shape_data.stroke_on_top = False
+        svg_anim = parse_svg_file(self.file, 0, parser.lottie.out_point, parser.lottie.frame_rate)
+        layer = svg_anim.layers[0].clone()
+        group = shapes.Group()
+        group.name = layer.name
+        group.shapes = layer.shapes + group.shapes
+        layer.transform.clone_into(group.transform)
+
+        delta_ap = group.bounding_box(0).center() - group.transform.anchor_point.value
+        group.transform.anchor_point.value += delta_ap
+        group.transform.position.value += delta_ap
+        group.transform.scale.value *= shape_data.size_multiplitier
+
+        if self.main_feature and shape_data.color:
+            self.main_feature.process(group, shape_data.color)
+
+        if parser.check_words("with"):
+            while True:
+                if parser.check_words("with"):
+                    parser.next()
+
+                parser.article()
+
+                lexind = parser.lexer.save()
+                color = parser.color()
+                if color:
+                    if parser.check_words(*self.feature_map.keys()):
+                        feature_name = parser.lexer.token.value
+                        feature = self.feature_map[feature_name]
+                        feature.process(group, color)
+                        parser.next()
+                else:
+                    parser.lexer.restore(lexind)
+
+                    if parser.shape_common_property(shape_data):
+                        pass
+                    else:
+                        parser.warn("Unknown feature")
+                        break
+
+                if parser.check_words("and"):
+                    parser.next()
+                    continue
+                else:
+                    break
+
+        if self.facing_direction != 0 and parser.check_words("facing", "looking"):
+            parser.next()
+            if parser.skip_words("to"):
+                parser.skip_words("the")
+
+            if parser.check_words("left", "right"):
+                direction = -1 if parser.token.value == "left" else 1
+                if direction != self.facing_direction:
+                    group.transform.scale.value.x *= -1
+            else:
+                parser.warn("Missing facing direction")
+
+            parser.next()
+
+        parser.add_shape(parent, group, shape_data)
+        return True
+
