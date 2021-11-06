@@ -1174,10 +1174,13 @@ class SvgShape:
         group.shapes = layer.shapes + group.shapes
         layer.transform.clone_into(group.transform)
 
-        delta_ap = group.bounding_box(0).center() - group.transform.anchor_point.value
-        group.transform.anchor_point.value += delta_ap
-        group.transform.position.value += delta_ap
-        group.transform.scale.value *= shape_data.size_multiplitier
+        wrapper = shapes.Group()
+        wrapper.add_shape(group)
+
+        delta_ap = group.bounding_box(0).center()
+        wrapper.transform.anchor_point.value += delta_ap
+        wrapper.transform.position.value += delta_ap
+        wrapper.transform.scale.value *= shape_data.size_multiplitier
 
         if self.main_feature and shape_data.color and shape_data.color_explicit:
             self.main_feature.process(group, shape_data.color)
@@ -1220,12 +1223,13 @@ class SvgShape:
             if parser.check_words("left", "right"):
                 direction = -1 if parser.token.value == "left" else 1
                 if direction != self.facing_direction:
-                    group.transform.scale.value.x *= -1
+                    wrapper.transform.scale.value.x *= -1
             else:
                 parser.warn("Missing facing direction")
 
             parser.next()
 
-        parser.add_shape(parent, group, shape_data)
+        shape_data.color = None
+        parser.add_shape(parent, wrapper, shape_data)
         return True
 
