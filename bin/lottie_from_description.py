@@ -10,26 +10,30 @@ from lottie.utils import script
 from lottie.utils import funky_parser
 
 
-arg_parser = script.get_parser()
-arg_parser.add_argument("text")
-ns = arg_parser.parse_args()
+parser = script.get_parser()
+parser.description = "Generate an animation fron a textual description"
+parser.add_argument("text")
 
-text_parser = funky_parser.Parser(ns.text, funky_parser.Logger())
-svg_loader = funky_parser.SvgLoader()
-text_parser.svg_shapes.append(funky_parser.SvgShape(
-    os.path.join(root, "examples", "blep.svg"),
-    ["glax", "blep"],
-    {
-        "scales": funky_parser.SvgFeature([], ["#3250b0", "#292f75"]),
-        "belly": funky_parser.SvgFeature([], ["#c4d9f5"]),
-        "eyes": funky_parser.SvgFeature([], ["#f01d0a"]),
-        "horns": funky_parser.SvgFeature([], ["#3a3c3f"]),
-    },
-    "scales",
-    1,
-    svg_loader
-))
 
-animation = text_parser.parse()
+if __name__ == "__main__":
+    ns = parser.parse_args()
 
-script.run(animation, ns)
+    text_parser = funky_parser.Parser(ns.text, funky_parser.Logger())
+    svg_loader = funky_parser.SvgLoader()
+    text_parser.svg_shapes.append(funky_parser.SvgShape(
+        os.path.join(root, "examples", "blep.svg"),
+        ["glax", "blep"],
+        {
+            "scales": funky_parser.SvgFeature([], ["#3250b0", "#292f75"]),
+            "belly": funky_parser.SvgFeature([], ["#c4d9f5"]),
+            "eyes": funky_parser.SvgFeature([], ["#f01d0a"]),
+            "horns": funky_parser.SvgFeature([], ["#3a3c3f"]),
+        },
+        "scales",
+        1,
+        svg_loader
+    ))
+
+    animation = text_parser.parse()
+
+    script.run(animation, ns)

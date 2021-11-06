@@ -13,7 +13,7 @@ os.makedirs(doxpath, exist_ok=True)
 scripts = []
 
 for scriptfilename in os.listdir(scriptpath):
-    if scriptfilename.endswith(".py"):
+    if scriptfilename.endswith(".py") and not scriptfilename.startswith("__"):
         module = SourceFileLoader(
             os.path.splitext(scriptfilename)[0],
             os.path.join(scriptpath, scriptfilename)
