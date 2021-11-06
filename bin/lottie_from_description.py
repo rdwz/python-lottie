@@ -29,6 +29,7 @@ text_parser.svg_shapes.append(funky_parser.SvgShape(
     1,
     svg_loader
 ))
+
 animation = text_parser.parse()
 
 script.run(animation, ns)

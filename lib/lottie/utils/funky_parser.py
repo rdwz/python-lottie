@@ -248,6 +248,7 @@ class Token:
 class ShapeData:
     def __init__(self, extent):
         self.color = [0, 0, 0]
+        self.color_explicit = False
         self.extent = extent
         self.size_multiplitier = 1
         self.portrait = False
@@ -641,6 +642,7 @@ class Parser:
             if color:
                 ok = True
                 shape.color = color
+                shape.color_explicit = True
 
             if self.check_words("transparent", "invisible"):
                 self.next()
@@ -1177,7 +1179,7 @@ class SvgShape:
         group.transform.position.value += delta_ap
         group.transform.scale.value *= shape_data.size_multiplitier
 
-        if self.main_feature and shape_data.color:
+        if self.main_feature and shape_data.color and shape_data.color_explicit:
             self.main_feature.process(group, shape_data.color)
 
         if parser.check_words("with"):
