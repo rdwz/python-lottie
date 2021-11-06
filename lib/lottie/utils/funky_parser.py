@@ -245,6 +245,19 @@ class Token:
         return repr(self.value)
 
 
+class AnimatableProperty:
+    def __init__(self, phrase, props):
+        self.phrase = phrase
+        self.props = props
+
+    def set_initial(self, value):
+        for prop in self.props:
+            prop.value = value
+
+    def get_value(self):
+        return self.props[0].value
+
+
 class ShapeData:
     def __init__(self, extent):
         self.color = [0, 0, 0]
@@ -262,6 +275,15 @@ class ShapeData:
     def scale(self, multiplier):
         self.size_multiplitier *= multiplier
         self.extent *= multiplier
+
+    def add_property(self, name, prop, phrase=None):
+        if name not in self.properties:
+            if phrase is None:
+                phrase = ["changing", name]
+            self.properties[name] = AnimatableProperty(phrase, [prop])
+        else:
+            self.properties[name].props.append(prop)
+
 
 class Lexer:
     expression = re.compile(
@@ -780,6 +802,7 @@ class Parser:
         if shape_data.color:
             fill = shapes.Fill(shape_data.color)
             g.add_shape(fill)
+            shape_data.add_property("color", fill.color)
 
         if shape_data.stroke and not shape_data.stroke_on_top:
             g.add_shape(shape_data.stroke)
@@ -788,7 +811,7 @@ class Parser:
             g.transform.opacity.value = 100 * shape_data.opacity
 
         if "position" in shape_data.properties:
-            center = shape_data.properties["position"].value
+            center = shape_data.properties["position"].get_value()
         else:
             center = g.bounding_box(0).center()
         g.transform.position.value = self.position(g, 0) + center
@@ -917,8 +940,8 @@ class Parser:
                 else:
                     break
 
-        shape_data.properties["position"] = shape.position
-        shape_data.properties["size"] = shape.size
+        shape_data.add_property("position", shape.position)
+        shape_data.add_property("size", shape.size)
 
     def shape_square(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
@@ -979,7 +1002,7 @@ class Parser:
 
         shape.inner_radius.value = shape.outer_radius.value / 2
 
-        shape_data.properties["position"] = shape.position
+        shape_data.add_property("position", shape.position)
 
         return shape
 
@@ -1103,16 +1126,16 @@ class Parser:
         round_base = shape_data.extent / 5
         size = self.rect_size(shape_data)
         shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
-        shape_data.properties["position"] = shape.position
-        shape_data.properties["size"] = shape.size
+        shape_data.add_property("position", shape.position)
+        shape_data.add_property("size", shape.size)
         return shape
 
     def shape_ellipse(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = self.rect_size(shape_data)
         shape = shapes.Ellipse(pos, size)
-        shape_data.properties["position"] = shape.position
-        shape_data.properties["size"] = shape.size
+        shape_data.add_property("position", shape.position)
+        shape_data.add_property("size", shape.size)
         return shape
 
 
@@ -1134,7 +1157,7 @@ class SvgFeature:
         self.layer_names = layer_names
         self.colors = [parse_color(color) for color in colors]
 
-    def process(self, lottie_object, new_color):
+    def iter_stylers(self, lottie_object):
         objects = []
         if self.layer_names:
             for layer_name in self.layer_names:
@@ -1147,7 +1170,11 @@ class SvgFeature:
         for object in objects:
             for styler in object.find_all((shapes.Fill, shapes.Stroke)):
                 if len(self.colors) == 0 or styler.color.value in self.colors:
-                    styler.color.value = new_color
+                    yield styler
+
+    def process(self, lottie_object, new_color):
+        for styler in self.iter_stylers(lottie_object):
+            styler.color.value = new_color
 
 
 class SvgShape:
@@ -1182,8 +1209,18 @@ class SvgShape:
         wrapper.transform.position.value += delta_ap
         wrapper.transform.scale.value *= shape_data.size_multiplitier
 
-        if self.main_feature and shape_data.color and shape_data.color_explicit:
-            self.main_feature.process(group, shape_data.color)
+        for name, feature in self.feature_map.items():
+            singular = name[:-1] if name.endswith("s") else name
+            shape_data.properties[name] = AnimatableProperty([singular, "color"], [])
+            for styler in feature.iter_stylers(group):
+                shape_data.add_property(name, styler.color)
+
+        if self.main_feature:
+            for styler in self.main_feature.iter_stylers(group):
+                shape_data.add_property("color", styler.color)
+
+            if shape_data.color and shape_data.color_explicit:
+                shape_data.properties["color"].set_initial(shape_data.color)
 
         if parser.check_words("with"):
             while True:
@@ -1197,8 +1234,7 @@ class SvgShape:
                 if color:
                     if parser.check_words(*self.feature_map.keys()):
                         feature_name = parser.lexer.token.value
-                        feature = self.feature_map[feature_name]
-                        feature.process(group, color)
+                        shape_data.properties[feature_name].set_initial(color)
                         parser.next()
                 else:
                     parser.lexer.restore(lexind)
