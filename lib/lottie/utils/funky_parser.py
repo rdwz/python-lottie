@@ -245,17 +245,42 @@ class Token:
         return repr(self.value)
 
 
+class AnimatableType:
+    Position = enum.auto()
+    Color = enum.auto()
+    Angle = enum.auto()
+    Size = enum.auto()
+    Number = enum.auto()
+    Integer = enum.auto()
+
+
 class AnimatableProperty:
-    def __init__(self, phrase, props):
+    def __init__(self, name, phrase, props, type: AnimatableType):
+        self.name = name.split()
         self.phrase = phrase
         self.props = props
+        self.type = type
 
     def set_initial(self, value):
         for prop in self.props:
             prop.value = value
 
-    def get_value(self):
-        return self.props[0].value
+    def get_initial(self):
+        return self.props[0].get_value(0)
+
+    def add_keyframe(self, time, value):
+        for prop in self.props:
+            if not prop.animated and time > 0:
+                prop.add_keyframe(0, prop.value)
+            prop.add_keyframe(time, value)
+
+    def loop(self, time):
+        for prop in self.props:
+            if prop.animated:
+                prop.add_keyframe(time, prop.get_value(0))
+
+    def get_value(self, time):
+        return self.props[0].get_value(time)
 
 
 class ShapeData:
@@ -276,13 +301,11 @@ class ShapeData:
         self.size_multiplitier *= multiplier
         self.extent *= multiplier
 
-    def add_property(self, name, prop, phrase=None):
-        if name not in self.properties:
-            if phrase is None:
-                phrase = ["changing", name]
-            self.properties[name] = AnimatableProperty(phrase, [prop])
-        else:
-            self.properties[name].props.append(prop)
+    def define_property(self, name, type, props, phrase=None):
+        self.properties[name] = AnimatableProperty(name, phrase, props, type)
+
+    def add_property(self, name, prop):
+        self.properties[name].props.append(prop)
 
 
 class Lexer:
@@ -798,7 +821,7 @@ class Parser:
         if shape_data.color:
             fill = shapes.Fill(shape_data.color)
             g.add_shape(fill)
-            shape_data.add_property("color", fill.color)
+            shape_data.define_property("color", AnimatableType.Color, [fill.color])
 
         if shape_data.stroke and not shape_data.stroke_on_top:
             g.add_shape(shape_data.stroke)
@@ -807,17 +830,23 @@ class Parser:
             g.transform.opacity.value = 100 * shape_data.opacity
 
         if "position" in shape_data.properties:
-            center = shape_data.properties["position"].get_value()
+            center = shape_data.properties["position"].get_initial()
         else:
             center = g.bounding_box(0).center()
         g.transform.position.value = self.position(g, 0) + center
         g.transform.anchor_point.value = NVector(*center)
+        shape_data.define_property("position", AnimatableType.Position, [g.transform.position], ["moves"])
+        shape_data.define_property("rotation", AnimatableType.Angle, [g.transform.rotation], ["rotates"])
 
         if self.check_words("rotated"):
             self.next()
             g.transform.rotation.value = self.angle(0)
 
         parent.insert_shape(0, g)
+
+        if self.skip_words("that"):
+            self.animated_properties(shape_data)
+
         return g
 
     def position(self, shape: shapes.Group, time: float):
@@ -883,6 +912,128 @@ class Parser:
             y + dy * qual,
         )
 
+    def animation_time(self, time, required):
+        if self.skip_words("at"):
+            if self.skip_words("the"):
+                self.require_one_of("end")
+                self.next()
+                return self.lottie.out_point
+            return self.time(time)
+        if self.skip_words("after"):
+            return self.time(0) + time
+        if required:
+            return time
+        return None
+
+    def animated_properties(self, shape_data: ShapeData):
+        time = 0
+        while True:
+            prop_time = self.animation_time(time, False)
+            selected_property = None
+            changing = self.skip_words("changing", "changes")
+            possesive = self.skip_words("its", "his", "her", "their")
+            found_property = None
+            value = None
+            loop = False
+
+            if possesive or changing:
+                for property in shape_data.properties.values():
+                    if self.check_word_sequence(property.name):
+                        found_property = property
+                        if possesive and not changing:
+                            if self.skip_words("loops"):
+                                self.skip_words("back")
+                                loop = True
+                                break
+                            else:
+                                self.skip_words("changes")
+                        value = self.animated_property(shape_data, property, time)
+                        break
+            else:
+                for property in shape_data.properties.values():
+                    if property.phrase and self.check_word_sequence(property.phrase):
+                        found_property = property
+                        value = self.animated_property(shape_data, property, time)
+                        break
+
+            if not found_property:
+                self.warn("Unknown property")
+                break
+
+            if prop_time is None:
+                self.prop_time = self.animation_time(time, True)
+            time = prop_time
+
+            if loop:
+                found_property.loop(time)
+            else:
+                if value is None:
+                    break
+
+                found_property.add_keyframe(time, value)
+
+            cont = self.skip_and()
+            cont = self.skip_words("then") or cont
+            if not cont:
+                break
+
+    def animated_property(self, shape_data: ShapeData, property: AnimatableProperty, time):
+        relative = False
+        if not self.skip_words("to"):
+            relative = self.skip_words("by")
+
+        if property.type == AnimatableType.Angle:
+            value = self.angle(None)
+        elif property.type == AnimatableType.Number:
+            value = self.number(None)
+        elif property.type == AnimatableType.Integer:
+            value = self.integer(None)
+        elif property.type == AnimatableType.Color:
+            value = self.color()
+            if not value:
+                self.warn("Expected color")
+        elif property.type == AnimatableType.Position:
+            value = self.position_value(property.get_value(time))
+        elif property.type == AnimatableType.Size:
+            value = self.vector_value()
+
+        if value is not None and relative:
+            value += property.get_value(time)
+
+        return value
+
+    def vector_value(self):
+        x = self.number(0)
+        if self.token.type == TokenType.Punctuation and self.token.value == ",":
+            self.next()
+        y = self.number(0)
+
+        return NVector(0, 0)
+
+    def position_value(self, start: NVector):
+
+        if self.token.type == TokenType.Word:
+            direction = None
+
+            if self.check_words("left") or self.check_word_sequence("the", "left"):
+                direction = NVector(-1, 0)
+            elif self.check_words("right") or self.check_word_sequence("the", "right"):
+                direction = NVector(1, 0)
+            elif self.check_words("up", "upwards", "upward"):
+                direction = NVector(0, -1)
+            elif self.check_words("down", "downwards", "downward"):
+                direction = NVector(0, 1)
+
+            if direction is None:
+                self.warn("Expected direction or position")
+                return start
+
+            self.skip_words("by")
+
+            return start + direction * self.number()
+
+        return self.vector_value()
+
     def shape_common_property(self, shape_data: ShapeData):
         color = NVector(0, 0, 0)
         width = 4
@@ -933,8 +1084,8 @@ class Parser:
                 if not self.skip_and():
                     break
 
-        shape_data.add_property("position", shape.position)
-        shape_data.add_property("size", shape.size)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.position])
 
     def shape_square(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
@@ -992,7 +1143,10 @@ class Parser:
 
         shape.inner_radius.value = shape.outer_radius.value / 2
 
-        shape_data.add_property("position", shape.position)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("outer radius", AnimatableType.Number, [shape.outer_radius])
+        shape_data.define_property("radius", AnimatableType.Number, [shape.outer_radius])
+        shape_data.define_property("inner radius", AnimatableType.Number, [shape.inner_radius])
 
         return shape
 
@@ -1112,16 +1266,16 @@ class Parser:
         round_base = shape_data.extent / 5
         size = self.rect_size(shape_data)
         shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
-        shape_data.add_property("position", shape.position)
-        shape_data.add_property("size", shape.size)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.size])
         return shape
 
     def shape_ellipse(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = self.rect_size(shape_data)
         shape = shapes.Ellipse(pos, size)
-        shape_data.add_property("position", shape.position)
-        shape_data.add_property("size", shape.size)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.size])
         return shape
 
 
@@ -1197,11 +1351,13 @@ class SvgShape:
 
         for name, feature in self.feature_map.items():
             singular = name[:-1] if name.endswith("s") else name
-            shape_data.properties[name] = AnimatableProperty([singular, "color"], [])
+            shape_data.define_property(name, AnimatableType.Color, [])
             for styler in feature.iter_stylers(group):
                 shape_data.add_property(name, styler.color)
 
         if self.main_feature:
+            shape_data.define_property("color", AnimatableType.Color, [])
+
             for styler in self.main_feature.iter_stylers(group):
                 shape_data.add_property("color", styler.color)
 
