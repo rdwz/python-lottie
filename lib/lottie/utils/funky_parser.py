@@ -929,7 +929,6 @@ class Parser:
         time = 0
         while True:
             prop_time = self.animation_time(time, False)
-            selected_property = None
             changing = self.skip_words("changing", "changes")
             possesive = self.skip_words("its", "his", "her", "their")
             found_property = None
@@ -1008,7 +1007,7 @@ class Parser:
             self.next()
         y = self.number(0)
 
-        return NVector(0, 0)
+        return NVector(x, y)
 
     def position_value(self, start: NVector):
 
@@ -1351,7 +1350,7 @@ class SvgShape:
 
         for name, feature in self.feature_map.items():
             singular = name[:-1] if name.endswith("s") else name
-            shape_data.define_property(name, AnimatableType.Color, [])
+            shape_data.properties[name] = AnimatableProperty(singular + " color", None, [], AnimatableType.Color)
             for styler in feature.iter_stylers(group):
                 shape_data.add_property(name, styler.color)
 
@@ -1407,4 +1406,3 @@ class SvgShape:
         shape_data.color = None
         parser.add_shape(parent, wrapper, shape_data)
         return True
-
