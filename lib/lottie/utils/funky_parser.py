@@ -219,7 +219,7 @@ class TokenType(enum.Enum):
     Number = enum.auto()
     Eof = enum.auto()
     String = enum.auto()
-    Separator = enum.auto()
+    Punctuation = enum.auto()
 
 
 class Token:
@@ -341,14 +341,7 @@ class Lexer:
             value = match.group("string")[1:-1]
         elif match.group("punc"):
             value = match.group("punc")
-            if value == ",":
-                type = TokenType.Word
-                value = "and"
-            elif value == ":":
-                self.pos = match.end("token")
-                return self.next()
-            else:
-                type = TokenType.Separator
+            type = TokenType.Punctuation
 
         self.pos = match.end("token")
         return self._new_token(Token(type, self.line, self.pos - self.line_pos, match.start("token"), self.pos, value))
@@ -526,9 +519,8 @@ class Parser:
                 self.warn("Unknown property")
                 self.next()
                 return
-            if self.check_words("and"):
-                self.next()
-            else:
+
+            if not self.skip_and():
                 break
 
     def animation(self):
@@ -555,8 +547,8 @@ class Parser:
                     props.pop("width")
                     props.pop("height")
                 self.properties(self.lottie, props)
-            elif self.check_words("and"):
-                self.next()
+            elif self.skip_and():
+                pass
             else:
                 return
 
@@ -610,12 +602,9 @@ class Parser:
 
     def layers(self, composition):
         while True:
-            if self.check_words("and"):
-                self.next()
-            if self.check_words("then"):
-                self.next()
-            if self.check_words("finally"):
-                self.next()
+            self.skip_and()
+            self.skip_words("then") or self.skip_words("finally")
+
             if self.check_words("there's"):
                 self.next()
                 self.layer(composition)
@@ -649,8 +638,15 @@ class Parser:
 
         self.shape_list(layer)
 
-        if self.token.type == TokenType.Separator:
+        if self.token.type == TokenType.Punctuation and self.token.value in ",;.":
             self.next()
+
+    def skip_and(self):
+        if self.token.type == TokenType.Punctuation and self.token.value == ",":
+            self.next()
+            self.skip_words("and")
+            return True
+        return self.skip_words("and")
 
     def shape_list(self, parent):
         extent = min(self.lottie.width, self.lottie.height) * 0.4
@@ -934,10 +930,7 @@ class Parser:
                     self.warn("Unknown property")
                     break
 
-                if self.check_words("and"):
-                    self.next()
-                    continue
-                else:
+                if not self.skip_and():
                     break
 
         shape_data.add_property("position", shape.position)
@@ -994,10 +987,7 @@ class Parser:
                     self.warn("Unknown property")
                     break
 
-                if self.check_words("and"):
-                    self.next()
-                    continue
-                else:
+                if not self.skip_and():
                     break
 
         shape.inner_radius.value = shape.outer_radius.value / 2
@@ -1050,8 +1040,7 @@ class Parser:
 
         amount, has_fraction = self.fraction()
 
-        if self.check_words("and"):
-            self.next()
+        if self.skip_and():
             more_frac = self.fraction()[0]
             if has_fraction:
                 amount += amount * more_frac
@@ -1060,8 +1049,7 @@ class Parser:
 
         if self.check_words("turns"):
             self.next()
-            if self.check_words("and"):
-                self.next()
+            if self.skip_and():
                 amount += self.fraction()[0]
             amount *= 360
         elif self.require_one_of("degrees"):
@@ -1100,9 +1088,7 @@ class Parser:
                     self.next()
                     break
 
-                if self.check_words("and"):
-                    continue
-                else:
+                if not self.skip_and():
                     break
 
         if width is None and height is None:
@@ -1245,10 +1231,7 @@ class SvgShape:
                         parser.warn("Unknown feature")
                         break
 
-                if parser.check_words("and"):
-                    parser.next()
-                    continue
-                else:
+                if not parser.skip_and():
                     break
 
         if self.facing_direction != 0 and parser.check_words("facing", "looking"):
