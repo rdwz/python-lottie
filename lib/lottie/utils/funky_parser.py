@@ -421,6 +421,7 @@ class Parser:
         self.allow_resize = True
         self.max_duration = None
         self.svg_shapes = []
+        self.font = FontStyle("Ubuntu", 80)
 
     def next(self):
         return self.lexer.next()
@@ -875,7 +876,7 @@ class Parser:
 
         qual = self.size_qualifier()
 
-        if self.check_words("to", "in", "towards", "on"):
+        if self.check_words("to", "in", "towards", "on", "at"):
             self.next()
             if self.check_words("the"):
                 self.next()
@@ -1296,11 +1297,28 @@ class Parser:
 
     def shape_text(self, shape_data: ShapeData):
         text = self.string("")
-        font = FontStyle("Ubuntu", 80 * shape_data.size_multiplitier)
+        font = self.font.clone()
         shape = font.render(text)
-        center = shape.bounding_box().center()
-        shape.transform.position.value.y = self.lottie.height / 2 - center.y
-        shape.transform.position.value.x = self.lottie.width / 2 - center.x
+
+        box = shape.bounding_box()
+
+        center = box.center()
+        anim_center = NVector(self.lottie.width / 2, self.lottie.height / 2)
+        shape.transform.anchor_point.value = anim_center
+        shape.transform.position.value.y = self.lottie.height - center.y
+        shape.transform.position.value.x = self.lottie.width - center.x
+
+        scale = shape_data.size_multiplitier
+        if box.width > self.lottie.width > 0:
+            scale *= self.lottie.width / box.width
+
+        if scale != 1:
+            wrapper = shapes.Group()
+            wrapper.transform.position.value = wrapper.transform.anchor_point.value = anim_center
+            wrapper.transform.scale.value *= scale
+            wrapper.add_shape(shape)
+            return wrapper
+
         return shape
 
 
