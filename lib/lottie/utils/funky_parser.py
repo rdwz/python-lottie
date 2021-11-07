@@ -947,6 +947,7 @@ class Parser:
 
     def animated_properties(self, shape_data: ShapeData):
         time = 0
+
         while True:
             prop_time = self.animation_time(time, False)
             changing = self.skip_words("changing", "changes")
@@ -1168,7 +1169,7 @@ class Parser:
             if self.check_words("clockwise"):
                 self.next()
             return -1
-        return 1
+        return 0
 
     def fraction(self):
         if self.article():
@@ -1205,12 +1206,16 @@ class Parser:
 
         if self.check_words("turns"):
             self.next()
-            if self.skip_and():
-                amount += self.fraction()[0]
             amount *= 360
         elif self.require_one_of("degrees"):
             self.next()
+        elif self.check_word_sequence(["pi", "radians"]):
+            amount *= 180
+            if direction == 0:
+                direction = -1
 
+        if direction == 0:
+            direction = 1
         return amount * direction
 
     def rect_properties(self, shape_data: ShapeData, shape):
@@ -1297,14 +1302,6 @@ class Parser:
         shape.transform.position.value.y = self.lottie.height / 2 - center.y
         shape.transform.position.value.x = self.lottie.width / 2 - center.x
         return shape
-
-    def string(self, default):
-        if self.token.type != TokenType.String:
-            self.warn("Expected string")
-            return default
-        value = self.token.value
-        self.next()
-        return value
 
 
 class SvgLoader:
