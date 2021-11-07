@@ -526,26 +526,44 @@ class Parser:
         self.lexer.restore(index)
         return False
 
-    def properties(self, object, properties):
+    def possesive(self):
+        return self.skip_words("its", "his", "her", "their")
+
+    def properties(self, shape_data, callback, callback_args=[], words=["with"]):
+        lexind_and = -1
         while True:
-            self.article()
-            if self.check_words(*properties.keys()):
-                prop = self.token.value
-                self.next()
-                if self.check_words("of"):
-                    self.next()
+            must_have_property = self.skip_words(*words)
 
-                value = properties[prop](getattr(object, prop))
-                setattr(object, prop, value)
-            else:
-                if self.check_words("with", "has"):
-                    return
-                self.warn("Unknown property")
-                self.next()
-                return
+            self.article() or self.possesive()
 
+            lexind = self.lexer.save()
+
+            if not callback(*callback_args):
+                self.lexer.restore(lexind)
+
+                if shape_data and not self.shape_common_property(shape_data):
+                    if must_have_property:
+                        self.warn("Unknown property")
+                        break
+                if lexind_and != -1:
+                    self.lexer.restore(lexind_and)
+                break
+
+            lexind_and = self.lexer.save()
             if not self.skip_and():
                 break
+
+    def simple_properties_callback(self, object, properties):
+        if self.check_words(*properties.keys()):
+            prop = self.token.value
+            self.next()
+            if self.check_words("of"):
+                self.next()
+
+            value = properties[prop](getattr(object, prop))
+            setattr(object, prop, value)
+            return True
+        return False
 
     def animation(self):
         while True:
@@ -561,7 +579,6 @@ class Parser:
                 if self.max_duration and self.lottie.out_point > self.max_duration:
                     self.lottie.out_point = self.max_duration
             elif self.check_words("with", "has"):
-                self.next()
                 props = {
                     "width": self.integer,
                     "height": self.integer,
@@ -570,7 +587,7 @@ class Parser:
                 if not self.allow_resize:
                     props.pop("width")
                     props.pop("height")
-                self.properties(self.lottie, props)
+                self.properties(None, self.simple_properties_callback, [self.lottie, props], ["with", "has"])
             elif self.skip_and():
                 pass
             else:
@@ -626,6 +643,8 @@ class Parser:
 
     def layers(self, composition):
         while True:
+            if self.token.type == TokenType.Punctuation and self.token.value in ";.":
+                self.next()
             self.skip_and()
             self.skip_words("then") or self.skip_words("finally")
 
@@ -856,7 +875,7 @@ class Parser:
 
         qual = self.size_qualifier()
 
-        if self.check_words("to", "in", "towards"):
+        if self.check_words("to", "in", "towards", "on"):
             self.next()
             if self.check_words("the"):
                 self.next()
@@ -931,7 +950,7 @@ class Parser:
         while True:
             prop_time = self.animation_time(time, False)
             changing = self.skip_words("changing", "changes")
-            possesive = self.skip_words("its", "his", "her", "their")
+            possesive = self.possesive()
             found_property = None
             value = None
             loop = False
@@ -977,25 +996,30 @@ class Parser:
             if not cont:
                 break
 
+    def animated_property_value(self, property: AnimatableProperty, time):
+        if property.type == AnimatableType.Angle:
+            return self.angle(None)
+        elif property.type == AnimatableType.Number:
+            return self.number(None)
+        elif property.type == AnimatableType.Integer:
+            return self.integer(None)
+        elif property.type == AnimatableType.Color:
+            value = self.color()
+            if not value:
+                self.warn("Expected color")
+            return value
+        elif property.type == AnimatableType.Position:
+            return self.position_value(property.get_value(time))
+        elif property.type == AnimatableType.Size:
+            return self.vector_value()
+        return None
+
     def animated_property(self, shape_data: ShapeData, property: AnimatableProperty, time):
         relative = False
         if not self.skip_words("to"):
             relative = self.skip_words("by")
 
-        if property.type == AnimatableType.Angle:
-            value = self.angle(None)
-        elif property.type == AnimatableType.Number:
-            value = self.number(None)
-        elif property.type == AnimatableType.Integer:
-            value = self.integer(None)
-        elif property.type == AnimatableType.Color:
-            value = self.color()
-            if not value:
-                self.warn("Expected color")
-        elif property.type == AnimatableType.Position:
-            value = self.position_value(property.get_value(time))
-        elif property.type == AnimatableType.Size:
-            value = self.vector_value()
+        value = self.animated_property_value(property, time)
 
         if value is not None and relative:
             value += property.get_value(time)
@@ -1063,43 +1087,31 @@ class Parser:
 
         return False
 
-    def square_properties(self, shape_data: ShapeData, shape):
-        if self.check_words("with", "of"):
-            while True:
-                if self.check_words("with", "of"):
-                    self.next()
-
-                self.article()
-
-                if self.check_words("size"):
-                    self.next()
-                    extent = self.number(shape.outer_radius.value)
-                    shape.size.value = NVector(extent, extent)
-                elif self.shape_common_property(shape_data):
-                    pass
-                else:
-                    self.warn("Unknown property")
-                    break
-
-                if not self.skip_and():
-                    break
-
-        shape_data.define_property("position", AnimatableType.Position, [shape.position])
-        shape_data.define_property("size", AnimatableType.Size, [shape.position])
+    def animated_properties_callback(self, shape_data: ShapeData):
+        for property in shape_data.properties.values():
+            if self.check_word_sequence(property.name):
+                self.skip_words("to", "is", "are")
+                property.set_initial(self.animated_property_value(property, 0))
+                return True
+        return False
 
     def shape_square(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = NVector(shape_data.extent, shape_data.extent)
         round_base = shape_data.extent / 5
         shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
-        self.square_properties(shape_data, shape)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.position])
+        self.properties(shape_data, self.animated_properties_callback, [shape_data], ["with", "of"])
         return shape
 
     def shape_circle(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         size = NVector(shape_data.extent, shape_data.extent)
         shape = shapes.Ellipse(pos, size)
-        self.square_properties(shape_data, shape)
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.position])
+        self.properties(shape_data, self.animated_properties_callback, [shape_data], ["with", "of"])
         return shape
 
     def shape_star(self, shape_data: ShapeData, sides: int = None):
@@ -1114,32 +1126,21 @@ class Parser:
         shape.star_type = shapes.StarType.Star
         shape.points.value = sides or 5
 
-        if self.check_words("with", "of"):
-            while True:
-                if self.check_words("with", "of"):
+        def callback():
+            if self.animated_properties_callback(shape_data):
+                return True
+
+            if self.check_words("diameter"):
+                shape.outer_radius.value = self.number(shape.outer_radius.value) / 2
+                return True
+            elif self.token.type == TokenType.Number:
+                if sides:
+                    self.warn("Number of sides already specified")
+                shape.points.value = self.integer(shape.points.value)
+                if self.require_one_of("points", "sides", "point", "side"):
                     self.next()
-
-                self.article()
-
-                if self.check_words("radius"):
-                    self.next()
-                    shape.outer_radius.value = self.number(shape.outer_radius.value)
-                elif self.check_words("diameter"):
-                    shape.outer_radius.value = self.number(shape.outer_radius.value) / 2
-                elif self.token.type == TokenType.Number:
-                    if sides:
-                        self.warn("Number of sides already specified")
-                    shape.points.value = self.integer()
-                    if self.require_one_of("points", "sides", "point", "side"):
-                        self.next()
-                elif self.shape_common_property(shape_data):
-                    pass
-                else:
-                    self.warn("Unknown property")
-                    break
-
-                if not self.skip_and():
-                    break
+                return True
+            return False
 
         shape.inner_radius.value = shape.outer_radius.value / 2
 
@@ -1147,6 +1148,7 @@ class Parser:
         shape_data.define_property("outer radius", AnimatableType.Number, [shape.outer_radius])
         shape_data.define_property("radius", AnimatableType.Number, [shape.outer_radius])
         shape_data.define_property("inner radius", AnimatableType.Number, [shape.inner_radius])
+        self.properties(shape_data, callback, [], ["with", "of", "has"])
 
         return shape
 
@@ -1211,71 +1213,80 @@ class Parser:
 
         return amount * direction
 
-    def rect_size(self, shape_data: ShapeData):
+    def rect_properties(self, shape_data: ShapeData, shape):
         extent = shape_data.extent
-        width = None
-        height = None
-        ratio = math.sqrt(2)
+        parse_data = {
+            "width": None,
+            "height": None,
+            "ratio": math.sqrt(2),
+            "size_specified": False
+        }
         handle_orientation = True
 
-        if self.check_words("with", "of"):
-            while True:
-                if self.check_words("with", "of"):
-                    self.next()
+        shape_data.define_property("position", AnimatableType.Position, [shape.position])
+        shape_data.define_property("size", AnimatableType.Size, [shape.size])
 
-                if self.check_words("ratio"):
-                    self.next()
-                    ratio = self.fraction()[0]
-                    if ratio <= 0:
-                        self.warn("Ratio must be positive")
-                        ratio = math.sqrt(2)
-                elif self.check_words("width"):
-                    self.next()
-                    width = self.number(0)
-                elif self.check_words("height"):
-                    self.next()
-                    height = self.number(0)
-                elif self.shape_common_property(shape_data):
-                    pass
+        def callback():
+            if self.animated_properties_callback(shape_data):
+                return True
+
+            if self.check_words("ratio"):
+                self.next()
+                ratio = self.fraction()[0]
+                if ratio <= 0:
+                    self.warn("Ratio must be positive")
                 else:
-                    self.warn("Unknown property")
-                    self.next()
-                    break
+                    parse_data["ratio"] = ratio
+                return True
+            elif self.check_words("width"):
+                self.next()
+                parse_data["width"] = self.number(0)
+                return True
+            elif self.check_words("height"):
+                self.next()
+                parse_data["height"] = self.number(0)
+                return True
+            elif self.check_words("size"):
+                parse_data["size_specified"] = True
 
-                if not self.skip_and():
-                    break
+            return False
 
-        if width is None and height is None:
-            width = extent
-            height = width / ratio
-        elif width is None:
-            width = height * ratio
-        elif height is None:
-            height = width / ratio
-        else:
-            handle_orientation = False
+        self.properties(shape_data, callback, [], ["with", "of", "has"])
 
-        if handle_orientation:
-            if (width > height and shape_data.portrait) or (width < height and not shape_data.portrait):
-                width, height = height, width
+        if not parse_data["size_specified"]:
+            width = parse_data["width"]
+            height = parse_data["height"]
+            ratio = parse_data["ratio"]
 
-        return NVector(width, height)
+            if width is None and height is None:
+                width = extent
+                height = width / ratio
+            elif width is None:
+                width = height * ratio
+            elif height is None:
+                height = width / ratio
+            else:
+                handle_orientation = False
+
+            if handle_orientation:
+                if (width > height and shape_data.portrait) or (width < height and not shape_data.portrait):
+                    width, height = height, width
+
+            shape.size.value = NVector(width, height)
 
     def shape_rectangle(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
         round_base = shape_data.extent / 5
-        size = self.rect_size(shape_data)
-        shape = shapes.Rect(pos, size, shape_data.roundness * round_base)
-        shape_data.define_property("position", AnimatableType.Position, [shape.position])
-        shape_data.define_property("size", AnimatableType.Size, [shape.size])
+
+        shape = shapes.Rect(pos, NVector(0, 0), shape_data.roundness * round_base)
+        shape_data.define_property("roundness", AnimatableType.Number, [shape.rounded])
+        self.rect_properties(shape_data, shape)
         return shape
 
     def shape_ellipse(self, shape_data: ShapeData):
         pos = NVector(self.lottie.width / 2, self.lottie.height / 2)
-        size = self.rect_size(shape_data)
-        shape = shapes.Ellipse(pos, size)
-        shape_data.define_property("position", AnimatableType.Position, [shape.position])
-        shape_data.define_property("size", AnimatableType.Size, [shape.size])
+        shape = shapes.Ellipse(pos, NVector(0, 0))
+        self.rect_properties(shape_data, shape)
         return shape
 
     def shape_text(self, shape_data: ShapeData):
@@ -1346,6 +1357,20 @@ class SvgShape:
         self.facing_direction = facing_direction
         self.svg_loader = svg_loader
 
+    def callback(self, parser: Parser, shape_data: ShapeData):
+        lexind = parser.lexer.save()
+        color = parser.color()
+        if color:
+            if parser.check_words(*self.feature_map.keys()):
+                feature_name = parser.lexer.token.value
+                shape_data.properties[feature_name].set_initial(color)
+                parser.next()
+                return True
+        else:
+            parser.lexer.restore(lexind)
+
+        return False
+
     def match(self, parent, parser: Parser, shape_data: ShapeData):
         if not parser.check_word_sequence(self.phrase):
             return False
@@ -1381,31 +1406,7 @@ class SvgShape:
             if shape_data.color and shape_data.color_explicit:
                 shape_data.properties["color"].set_initial(shape_data.color)
 
-        if parser.check_words("with"):
-            while True:
-                if parser.check_words("with"):
-                    parser.next()
-
-                parser.article()
-
-                lexind = parser.lexer.save()
-                color = parser.color()
-                if color:
-                    if parser.check_words(*self.feature_map.keys()):
-                        feature_name = parser.lexer.token.value
-                        shape_data.properties[feature_name].set_initial(color)
-                        parser.next()
-                else:
-                    parser.lexer.restore(lexind)
-
-                    if parser.shape_common_property(shape_data):
-                        pass
-                    else:
-                        parser.warn("Unknown feature")
-                        break
-
-                if not parser.skip_and():
-                    break
+        parser.properties(shape_data, self.callback, [parser, shape_data], ["with"])
 
         if self.facing_direction != 0 and parser.check_words("facing", "looking"):
             parser.next()
