@@ -786,7 +786,7 @@ class FontStyle:
         return group
 
     def clone(self):
-        return FontStyle(str(self._renderer.query), self.size, self.justify, NVector(*self.position), self.use_kerning)
+        return FontStyle(str(self.query), self.size, self.justify, NVector(*self.position), self.use_kerning)
 
     @property
     def ex(self):
