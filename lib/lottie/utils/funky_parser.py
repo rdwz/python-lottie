@@ -10,6 +10,7 @@ from ..objects.animation import Animation
 from ..objects import layers
 from ..objects import shapes
 from ..nvector import NVector
+from .font import FontStyle
 
 
 color_words = {
@@ -718,7 +719,7 @@ class Parser:
             elif lexind < self.lexer.token_index:
                 self.lexer.restore(lexind)
 
-            if self.check_words("star", "polygon", "ellipse", "rectangle", "circle", "square"):
+            if self.check_words("star", "polygon", "ellipse", "rectangle", "circle", "square", "text"):
                 shape_type = self.token.value
                 function = getattr(self, "shape_" + shape_type)
                 self.next()
@@ -1276,6 +1277,23 @@ class Parser:
         shape_data.define_property("position", AnimatableType.Position, [shape.position])
         shape_data.define_property("size", AnimatableType.Size, [shape.size])
         return shape
+
+    def shape_text(self, shape_data: ShapeData):
+        text = self.string("")
+        font = FontStyle("Ubuntu", 80 * shape_data.size_multiplitier)
+        shape = font.render(text)
+        center = shape.bounding_box().center()
+        shape.transform.position.value.y = self.lottie.height / 2 - center.y
+        shape.transform.position.value.x = self.lottie.width / 2 - center.x
+        return shape
+
+    def string(self, default):
+        if self.token.type != TokenType.String:
+            self.warn("Expected string")
+            return default
+        value = self.token.value
+        self.next()
+        return value
 
 
 class SvgLoader:
