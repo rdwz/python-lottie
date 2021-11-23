@@ -221,6 +221,7 @@ class TokenType(enum.Enum):
     Eof = enum.auto()
     String = enum.auto()
     Punctuation = enum.auto()
+    Color = enum.auto()
 
 
 class Token:
@@ -311,7 +312,7 @@ class ShapeData:
 
 class Lexer:
     expression = re.compile(
-        r'[\r\t ]*(?P<token>(?P<punc>[:,;.])|(?P<word>[a-zA-Z\']+)|' +
+        r'[\r\t ]*(?P<token>(?P<punc>[:,;.])|(?P<word>[a-zA-Z\']+)|(?P<color>#(?:[a-fA-F0-9]{3}){1,2})|' +
         r'(?P<number>-?[0-9]+(?P<fraction>\.[0-9]+)?)|(?P<string>"(?:[^"\\]|\\["\\nbt])+"))[\r\t ]*'
     )
 
@@ -366,6 +367,9 @@ class Lexer:
         elif match.group("punc"):
             value = match.group("punc")
             type = TokenType.Punctuation
+        elif match.group("color"):
+            value = match.group("color")
+            type = TokenType.Color
 
         self.pos = match.end("token")
         return self._new_token(Token(type, self.line, self.pos - self.line_pos, match.start("token"), self.pos, value))
@@ -451,6 +455,11 @@ class Parser:
             return self.complete_color(next_item[1], complete_word + next_item[0])
 
     def get_color(self, word_dict: dict, complete_word: str):
+        if self.token.type == TokenType.Color:
+            color = parse_color(self.token.value)
+            self.next()
+            return color
+
         if self.token.type != TokenType.Word:
             return None
 
@@ -697,7 +706,7 @@ class Parser:
         shape = ShapeData(extent)
         shape.count = self.count()
 
-        while self.token.type == TokenType.Word:
+        while True:
             ok = False
 
             color = self.color()
