@@ -1,6 +1,6 @@
 import math
 
-from ..nvector import NVector
+from ..nvector import NVector, PolarVector
 from ..objects.bezier import BezierPoint
 
 
@@ -50,8 +50,14 @@ class Ellipse:
         points.append(BezierPoint(self.point(angle1), NVector(0, 0), q1))
 
         # Then we iterate until the angle has been completed
-        tolerance = step / 2
-        while angle_left > tolerance:
+        half_step = step / 2
+        tolerance = math.pi / 100
+        while True:
+            if angle_left < half_step:
+                if angle_left < tolerance:
+                    break
+                step = angle_left
+
             lstep = min(angle_left, step)
             step_sign = lstep * sign
             angle2 = angle1 + step_sign
@@ -63,6 +69,9 @@ class Ellipse:
 
             points.append(BezierPoint(p2, -q2, q2))
             angle1 = angle2
+
+        points[-2].out_tangent = PolarVector(points[-1].in_tangent.length, points[-2].out_tangent.polar_angle)
+
         return points
 
     def _alpha(self, step):
