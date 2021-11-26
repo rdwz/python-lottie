@@ -601,6 +601,7 @@ class StrokeDash(VisualObject):
     ]
 
     def __init__(self, length=0, type=StrokeDashType.Dash):
+        super().__init__()
         self.name = type.name.lower()
         self.type = type
         self.length = Value(length)

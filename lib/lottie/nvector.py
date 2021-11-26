@@ -73,7 +73,7 @@ class NVector():
         return type(self)(*(abs(c) for c in self.components))
 
     @property
-    def length(self):
+    def length(self) -> float:
         return math.sqrt(sum(map(lambda x: x**2, self.components)))
 
     def dot(self, other):
