@@ -42,6 +42,9 @@ class Ellipse:
         angle_left = abs(angle_delta)
         step = math.pi / 2
         sign = -1 if anglestart+angle_delta < angle1 else 1
+        tolerance = math.pi / 100
+        if angle_left % step > tolerance:
+            step = angle_left / max(1, round(angle_left / step))
 
         # We need to fix the first handle
         firststep = min(angle_left, step) * sign
@@ -51,12 +54,10 @@ class Ellipse:
 
         # Then we iterate until the angle has been completed
         half_step = step / 2
-        tolerance = math.pi / 100
+        fix_tan = False
         while True:
             if angle_left < half_step:
-                if angle_left < tolerance:
-                    break
-                step = angle_left
+                break
 
             lstep = min(angle_left, step)
             step_sign = lstep * sign
@@ -69,8 +70,6 @@ class Ellipse:
 
             points.append(BezierPoint(p2, -q2, q2))
             angle1 = angle2
-
-        points[-2].out_tangent = PolarVector(points[-1].in_tangent.length, points[-2].out_tangent.polar_angle)
 
         return points
 

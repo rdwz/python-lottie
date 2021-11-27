@@ -3,6 +3,7 @@
  * Added PuckerBloat support
  * Fixed SVG conversion when the transform is missing
  * Lottie from textual description
+ * Improved ellipse arc to cubic bezier conversion
 
 ## 0.6.10 - 2021-09-18
  * Glaxnimate compatibility

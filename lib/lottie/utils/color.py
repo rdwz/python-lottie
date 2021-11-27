@@ -111,8 +111,8 @@ class Conversion:
         return colorsys.rgb_to_hsv(r, g, b)
 
     @staticmethod
-    def hsv_to_rgb(r, g, b):
-        return colorsys.hsv_to_rgb(r, g, b)
+    def hsv_to_rgb(h, s, v):
+        return colorsys.hsv_to_rgb(h, s, v)
 
     @staticmethod
     def hsl_to_hsv(h, s_hsl, l):

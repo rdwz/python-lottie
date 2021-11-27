@@ -14,7 +14,7 @@ class NVector():
         return str(self.components)
 
     def __repr__(self):
-        return "<NVector %s>" % self
+        return "NVector(%s)" % ", ".join(map(str, self))
 
     def __len__(self):
         return len(self.components)

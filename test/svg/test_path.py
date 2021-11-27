@@ -202,13 +202,13 @@ class TestArc(PathTester):
         self.assertIsInstance(path.shapes[1], objects.Stroke)
         bezier = path.shapes[0].shape.value
         self.assert_list_almost_equal(bezier.vertices, [
-            NVector(6, 10), NVector(6.8626965, 15.758131), NVector(15.2322608, 15.9819042), NVector(14, 10),
+            NVector(6.0, 10.0), NVector(6.983476375101468, 15.83464550463312), NVector(15.420375245065028, 15.83464550463312), NVector(14.0, 10.0)
         ])
         self.assert_list_almost_equal(bezier.in_tangents, [
-            NVector(0, 0), NVector(-2.5323342, -1.6407878), NVector(-2.0590729, 1.5180295), NVector(2.5323342, 1.6407878),
+            NVector(0, 0), NVector(-2.63098658, -1.6295395), NVector(-1.9596225, 1.6295395), NVector(2.732464255, 1.54515499)
         ])
         self.assert_list_almost_equal(bezier.out_tangents, [
-            NVector(-2.0590729, 1.5180295), NVector(2.5323342, 1.6407878), NVector(2.0590729, -1.5180295), NVector(0, 0)
+            NVector(-2.0958663, 1.54515499), NVector(2.63098658, 1.6295395), NVector(1.9596225, -1.6295395), NVector(0, 0)
         ])
 
     def test_large_sweep(self):
@@ -221,13 +221,13 @@ class TestArc(PathTester):
         self.assertIsInstance(path.shapes[1], objects.Stroke)
         bezier = path.shapes[0].shape.value
         self.assert_list_almost_equal(bezier.vertices, [
-            NVector(6, 10), NVector(4.4903685, 4.24186895), NVector(12.7677392, 4.0180958), NVector(14, 10),
+            NVector(6.0, 10.0), NVector(4.579624754934972, 4.1653544953668815), NVector(13.01652362489853, 4.165354495366879), NVector(14.0, 10.0)
         ])
         self.assert_list_almost_equal(bezier.in_tangents, [
-            NVector(0, 0), NVector(-1.8563359, 1.6407878), NVector(-2.6844953, -1.51802947), NVector(1.8563359, -1.6407878),
+            NVector(0, 0), NVector(-1.9596225, 1.6295395), NVector(-2.63098658, -1.6295395), NVector(2.0958663, -1.54515499)
         ])
         self.assert_list_almost_equal(bezier.out_tangents, [
-            NVector(-2.6844953, -1.5180295), NVector(1.8563359, -1.6407878), NVector(2.6844953, 1.5180295), NVector(0, 0)
+            NVector(-2.732464255, -1.54515499), NVector(1.9596225, -1.6295395), NVector(2.63098658, 1.6295395), NVector(0, 0)
         ])
 
     def test_small_nosweep(self):
