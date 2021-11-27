@@ -54,7 +54,6 @@ class Ellipse:
 
         # Then we iterate until the angle has been completed
         half_step = step / 2
-        fix_tan = False
         while True:
             if angle_left < half_step:
                 break
