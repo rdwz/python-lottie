@@ -246,6 +246,9 @@ class Bezier(LottieObject):
         @param t    A value between 0 and 1, percentage along the length of the curve
         @returns Two Bezier objects that correspond to self, but split at @p t
         """
+        if len(self.vertices) < 2:
+            return Bezier(), self.clone()
+
         i, split1, split2 = self._split(t)
 
         seg1 = Bezier()
