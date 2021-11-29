@@ -5,6 +5,7 @@
  * Lottie from textual description
  * Improved ellipse arc to cubic bezier conversion
  * Fixed splitting beziers with less than 2 points
+ * Added more lottie objects to the model
 
 ## 0.6.10 - 2021-09-18
  * Glaxnimate compatibility

@@ -390,42 +390,11 @@ class GaussianBlurEffect(Effect):
     type = 29
 
 
-#class ChangeColorEffect(Effect):
-    #"""!
-    #Gaussian blur
-    #"""
-    #_effects = [
-        #("view", EffectValueDropDown),
-        #("hue", EffectValueSlider),
-        #("lightness", EffectValueSlider),
-        #("saturation", EffectValueSlider),
-        #("color_to_change", EffectValueColor),
-        #("tolerance", EffectValueSlider),
-        #("softness", EffectValueSlider),
-        #("match", EffectValueDropDown),
-        #("invert_mask", EffectValueDropDown),
-    #]
-    ### %Effect type.
-    #type = 29
-
-
 ## @ingroup Lottie
-class ChangeToColorEffect(Effect):
+class CustomEffect(Effect):
     """!
-    Change to color
+    Grouing properties in custom effects
     """
-    _effects = [
-        ("from_color", EffectValueColor),
-        ("to_color", EffectValueColor),
-        ("change", EffectValueDropDown),
-        ("change_by", EffectValueDropDown),
-        ("tolerance", EffectValueIgnored),
-        ("hue", EffectValueSlider),
-        ("lightness", EffectValueSlider),
-        ("saturation", EffectValueSlider),
-        ("saturation_", EffectValueIgnored),
-        ("softness", EffectValueSlider),
-        ("view_correction", EffectValueDropDown),
-    ]
+    _effects = []
     ## %Effect type.
     type = 5

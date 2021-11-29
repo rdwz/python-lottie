@@ -30,14 +30,14 @@ class MaskedPath(LottieObject):
 ## @ingroup LottieCheck
 class TextAnimatorDataProperty(Transform):
     _props = [
-        LottieProp("rx", "rx", Value),
-        LottieProp("ry", "ry", Value),
+        LottieProp("rotate_x", "rx", Value),
+        LottieProp("rotate_y", "ry", Value),
         LottieProp("stroke_width", "sw", Value),
         LottieProp("stroke_color", "sc", MultiDimensional),
         LottieProp("fill_color", "fc", MultiDimensional),
-        LottieProp("fh", "fh", Value),
-        LottieProp("fs", "fs", Value),
-        LottieProp("fb", "fb", Value),
+        LottieProp("fill_hue", "fh", Value),
+        LottieProp("fill_saturation", "fs", Value),
+        LottieProp("fill_brightness", "fb", Value),
         LottieProp("tracking", "t", Value),
         LottieProp("scale", "s", MultiDimensional),
     ]
@@ -54,13 +54,26 @@ class TextAnimatorDataProperty(Transform):
         self.stroke_color = MultiDimensional()
         ## Fill color
         self.fill_color = MultiDimensional()
-        self.fh = Value()
-        ## 0-100?
-        self.fs = Value()
-        ## 0-100?
-        self.fb = Value()
+        ## Hue
+        self.fill_hue = Value()
+        ## Saturation 0-100
+        self.fill_saturation = Value()
+        ## Brightness 0-100
+        self.fill_brightness = Value()
         ## Tracking
         self.tracking = Value()
+
+
+## @ingroup Lottie
+class TextGrouping(LottieEnum):
+    Characters = 1
+    Word = 2
+    Line = 3
+    All = 4
+
+    @classmethod
+    def default(cls):
+        return cls.Characters
 
 
 ## @ingroup Lottie
@@ -68,12 +81,12 @@ class TextAnimatorDataProperty(Transform):
 class TextMoreOptions(LottieObject):
     _props = [
         LottieProp("alignment", "a", MultiDimensional),
-        LottieProp("g", "g", float),
+        LottieProp("grouping", "g", TextGrouping),
     ]
 
     def __init__(self):
         self.alignment = MultiDimensional(NVector(0, 0))
-        self.g = None
+        self.grouping = TextGrouping.default()
 
 
 ## @ingroup Lottie
@@ -81,6 +94,17 @@ class TextJustify(LottieEnum):
     Left = 0
     Right = 1
     Center = 2
+    JustifyWithLastLineLeft = 3
+    JustifyWithLastLineRight = 4
+    JustifyWithLastLineCenter = 5
+    JustifyWithLastLineFull = 6
+
+
+#ingroup Lottie
+class TextCaps(LottieEnum):
+    Regular = 0
+    AllCaps = 1
+    SmallCaps = 2
 
 
 ## @ingroup Lottie
@@ -98,7 +122,8 @@ class TextDocument(LottieObject):
         LottieProp("wrap_size", "sz", NVector),
         LottieProp("text", "t", str),
         LottieProp("justify", "j", TextJustify),
-        # ls?
+        LottieProp("text_caps", "ca", TextCaps, False),
+        LottieProp("tracking", "tr", float, False),
     ]
 
     def __init__(self, text="", font_size=10, color=None, font_family=""):
@@ -115,6 +140,10 @@ class TextDocument(LottieObject):
         self.text = text
         ## Font Size
         self.font_size = font_size
+        ## Text caps
+        self.text_caps = None
+        ## Text Tracking
+        self.tracking = None
 
 
 ## @ingroup Lottie
@@ -187,6 +216,7 @@ class Font(LottieObject):
         LottieProp("path", "fPath", str),
         LottieProp("weight", "fWeight", str),
         LottieProp("origin", "origin", FontPathOrigin),
+        LottieProp("css_class", "fClass", str),
     ]
 
     def __init__(self, font_family="sans", font_style="Regular", name=None):
@@ -197,6 +227,7 @@ class Font(LottieObject):
         self.path = None
         self.weight = None
         self.origin = None
+        self.css_class = None
 
 
 ## @ingroup Lottie

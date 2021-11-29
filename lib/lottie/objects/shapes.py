@@ -116,19 +116,27 @@ class ShapeElement(VisualObject):
         return self.name or super().__str__()
 
 
+#ingroup Lottie
+class ShapeDirection(LottieEnum):
+    ## Usually clockwise
+    Normal = 0
+    ## Usually counter clockwise
+    Reversed = 3
+
+
 ## @ingroup Lottie
 class Shape(ShapeElement):
     """!
     Drawable shape
     """
     _props = [
-        LottieProp("direction", "d", float, False),
+        LottieProp("direction", "d", ShapeDirection, False),
     ]
 
     def __init__(self):
         ShapeElement.__init__(self)
         ## After Effect's Direction. Direction how the shape is drawn. Used for trim path for example.
-        self.direction = 0
+        self.direction = ShapeDirection.Normal
 
     def to_bezier(self):
         """!
@@ -832,3 +840,52 @@ class PuckerBloat(ShapeElement):
     def __init__(self):
         ShapeElement.__init__(self)
         self.amount = Value(0)
+
+
+#ingroup Lottie
+## @note marked as unsupported by lottie
+class ZigZag(ShapeElement):
+    """!
+    Changes the edges of affected shapes into a series of peaks and valleys of uniform size
+    """
+    _props = [
+        LottieProp("shape_type", "ty", str, False),
+        LottieProp("roundness", "r", Value, False),
+        LottieProp("size", "s", Value, False),
+        LottieProp("points", "pt", Value, False),
+    ]
+    ## %Shape type.
+    type = "zz"
+
+    def __init__(self):
+        super().__init__()
+
+        ## Radius to maked it a smoother curve
+        self.roundness = Value(0)
+        ## Distance between peaks and troughs
+        self.size = Value(0)
+        ## Number of ridges
+        self.points = Value(1)
+
+
+#ingroup Lottie
+## @note marked as unsupported by lottie
+class OffsetPath(ShapeElement):
+    """!
+    Interpolates the shape with its center point and bezier tangents with the opposite direction
+    """
+    _props = [
+        LottieProp("shape_type", "ty", str, False),
+        LottieProp("amount", "a", Value, False),
+        LottieProp("line_join", "lj", LineJoin, False),
+        LottieProp("miter_limit", "ml", Value, False),
+    ]
+    ## %Shape type.
+    type = "op"
+
+    def __init__(self):
+        super().__init__()
+
+        self.amount = Value(0)
+        self.line_join = LineJoin.Round
+        self.miter_limit = Value(0)

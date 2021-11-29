@@ -25,15 +25,3 @@ class TextShape(LottieEnum):
     @classmethod
     def default(cls):
         return cls.Square
-
-
-## @ingroup Lottie
-class TextGrouping(LottieEnum):
-    Characters = 1
-    Word = 2
-    Line = 3
-    All = 4
-
-    @classmethod
-    def default(cls):
-        return cls.Characters

@@ -225,6 +225,9 @@ class LottieObject(LottieBase, metaclass=LottieObjectMeta):
     """!
     @brief Base class for mapping Python classes into Lottie JSON objects
     """
+    def __init__(self):
+        pass
+
     def to_dict(self):
         return {
             prop.lottie: prop.to_dict(self)

@@ -18,20 +18,24 @@ import lottie.objects
 import lottie.objects.shapes
 from lottie.objects.base import LottieEnum, LottieObject, PseudoList, LottieBase, PseudoBool, LottieProp
 
+name_map = {
+    "EffectNoValue": "no-value",
+    "Precomp": "precomposition",
+    "Matte3Effect": "matte3-effect",
+    "PreCompLayer": "precomposition-layer",
+    "AnimatableMixin": "animated-property",
+    "Rect": "rectangle",
+    "Star": "polystar",
+    "EffectValue": "effect-value",
+    "Chars": "character-data",
+}
+
 
 def class_name_to_ref(name):
-    if name == "Precomp":
-        return "precomposition"
-    elif name == "Matte3Effect":
-        return "matte3-effect"
-    elif name == "PreCompLayer":
-        return "precomposition-layer"
-    elif name == "AnimatableMixin":
-        return "animated-property"
-    elif name == "Rect":
-        return "rectangle"
-    elif name == "Star":
-        return "polystar"
+    if name in name_map:
+        return name_map[name]
+    elif name.startswith("EffectValue"):
+        name = name[len("EffectValue"):]
     return re.sub("([a-z])([A-Z])", r"\1-\2", name).lower()
 
 
@@ -63,11 +67,40 @@ def class_dirname(cls):
         return "animated-properties"
     elif module == "composition":
         return "animation"
+    if issubclass(cls, lottie.objects.effects.EffectValue):
+        return "effect-values"
     return module
 
 
 def class_full_ref(cls):
     return "#/$defs/%s/%s" % (class_dirname(cls), class_name_to_ref(cls.__name__))
+
+
+def chunks_to_camel(chunks):
+    return "".join(x[0].upper() + x[1:] for x in chunks)
+
+def class_name_from_full_ref(ref):
+    if ref.startswith("#/$defs/"):
+        ref = ref[len("#/$defs/"):]
+
+    dirname, classname = ref.split("/")
+
+    py_class_name = None
+
+    for key, value in name_map.items():
+        if value == classname:
+            py_class_name = key
+            break
+    else:
+        if dirname == "effect-values":
+            classname = "effect-value-" + classname
+        py_class_name = chunks_to_camel(classname.split("-"))
+
+    return py_class_name
+
+
+def class_from_full_ref(ref):
+    return getattr(lottie.objects, class_name_from_full_ref(ref))
 
 
 def scalar_type(json_prop, prop, default):
@@ -267,7 +300,15 @@ class Schema:
         return schema
 
 
+error_class = None
+
+
 def check_error(cls, msg):
+    global error_class
+    if error_class is not cls:
+        print("")
+        print(class_full_ref(cls))
+        error_class = cls
     print("%s.%s: %s" % (cls.__module__, cls.__name__, msg))
 
 
@@ -319,9 +360,10 @@ def check_prop(cls, prop: LottieProp, properties: dict, instance: LottieObject):
         raise
 
 
-def do_check_class(cls, schema: Schema):
+def do_check_class(cls, schema: Schema, all_defs):
     ref = class_full_ref(cls)
     class_schema = schema.find(ref)
+    all_defs.discard(ref)
     if class_schema is None:
         check_error(cls, "Not found in the schema")
         return
@@ -347,7 +389,7 @@ def do_check_class(cls, schema: Schema):
             check_error(cls, "Missing bases: %s" % " ".join(schema_bases))
 
         if issubclass(cls, lottie.objects.Effect) and cls is not lottie.objects.Effect:
-            ef = properties.pop("ef")
+            ef = properties.pop("ef", {})
             schema_values = ef.get("prefixItems", [])
             if len(schema_values) != len(cls._effects):
                 check_error(cls, "Mismatching effect values")
@@ -357,24 +399,20 @@ def do_check_class(cls, schema: Schema):
                     check_error(cls, "Mismatching effect value name: %s != %s" % (schema_value["title"], value[0]))
                 expected_ref = class_full_ref(value[1])
                 if schema_value["$ref"] != expected_ref:
-                    check_error(cls, "Mismatching effect value class for %s: %s != %s" % (value[0], expected_ref, schema_value["ref"]))
+                    check_error(cls, "Mismatching effect value class for %s: %s != %s" % (value[0], expected_ref, schema_value["$ref"]))
 
         instance = cls()
         for prop in cls._props[index:]:
             check_prop(cls, prop, properties, instance)
 
         for prop in properties.keys():
-            #for parent_prop in cls._props[:index]:
-                #if parent_prop.lottie == prop and getattr(instance, parent_prop.name):
-                    #break
-            #else:
             if prop != "ty":
                 check_error(cls, "Missing property %s" % prop)
 
     elif issubclass(cls, LottieEnum):
         values = set()
         for enum_value in class_schema["oneOf"]:
-            name = enum_value["title"].replace(" ", "")
+            name = chunks_to_camel(enum_value["title"].split())
             value = enum_value["const"]
             try:
                 py_value = cls(value)
@@ -391,40 +429,230 @@ def do_check_class(cls, schema: Schema):
                 check_error(cls, "Value not in schema: %s %r" % (val.name, val.value))
 
 
-def check_class(cls, schema: Schema):
+def check_class(cls, schema: Schema, all_defs):
     try:
-        do_check_class(cls, schema)
+        do_check_class(cls, schema, all_defs)
     except Exception:
         check_error(cls, "Exception!")
         raise
 
 
-def check_module(module, schema: Schema):
+def check_module(module, schema: Schema, all_defs):
     for clsname, cls in inspect.getmembers(module):
         if inspect.isclass(cls) and issubclass(cls, LottieBase) and cls.__module__ == module.__name__:
-            check_class(cls, schema)
+            check_class(cls, schema, all_defs)
 
 
 def action_check(subject, ns):
     with open(ns.schema) as f:
         schema = Schema(json.load(f))
 
+    all_defs = set()
+    for group_name, group in schema.data["$defs"].items():
+        for type_name in group:
+            all_defs.add("#/$defs/%s/%s" % (group_name, type_name))
+
     if subject is None:
         for module in loop_modules():
-            check_module(module, schema)
+            check_module(module, schema, all_defs)
+
+        if all_defs:
+            print("\nMissing:")
+            for missing in sorted(all_defs):
+                print(missing)
     elif inspect.isclass(subject):
-        check_class(subject, schema)
+        check_class(subject, schema, all_defs)
     else:
-        check_module(subject, schema)
+        check_module(subject, schema, all_defs)
+
+
+def py_string(str):
+    return repr(str).replace("'", '"')
+
+
+class SchemaProperty:
+    builtins = {
+        "string": "str",
+        "integer": "int",
+        "number": "float"
+    }
+
+    def __init__(self, lottie_name, schema):
+        self.lottie = lottie_name
+        self.title = schema.get("title", lottie_name)
+        if lottie_name is None:
+            self.python = chunks_to_camel(self.title.lower().split())
+        else:
+            self.python = self.title.lower().replace(" ", "_")
+        self.description = schema.get("description", "")
+
+        self.type_dep = None
+
+        if schema.get("type", "") == "array":
+            self.is_list = True
+            items = schema.get("items", {})
+            if items.get("type") == "number":
+                self.type = "NVector"
+                self.is_list = False
+            else:
+                self.get_type(items, schema)
+        else:
+            self.get_type(schema)
+            self.is_list = False
+
+        self.default = py_string(schema.get("default", schema.get("const", None)))
+
+    def get_type(self, schema):
+        if "$ref" in schema:
+            self.type = class_name_from_full_ref(schema["$ref"])
+            try:
+                self.type_dep = getattr(lottie.objects, self.type)
+            except AttributeError:
+                pass
+        else:
+            type = schema.get("type", "???")
+            self.type = self.builtins.get(type, type)
+
+    def declare(self):
+        return "LottieProp(%s, %s, %s, %s)" % (
+            py_string(self.python),
+            py_string(self.lottie),
+            self.type,
+            self.is_list
+        )
+
+    def initialize(self):
+        return "%s = %s" % (self.python, self.default)
+
+
+def get_all_properties(schema, properties):
+    for k, v in schema.get("properties", {}).items():
+        if k not in properties:
+            properties[k] = SchemaProperty(k, v)
+
+    for split in ["oneOf", "allOf", "anyOf"]:
+        if split in schema:
+            for item in schema[split]:
+                get_all_properties(item, properties)
+
+    for cond in ["if", "then", "else"]:
+        if split in schema:
+            get_all_properties(schema[split], properties)
+
+    if "$ref" in schema:
+        properties["__base__"] = class_from_full_ref(schema["$ref"])
+
+
+class PythonDependencies:
+    def __init__(self):
+        self.modules = {}
+
+    def add_module_name(self, module):
+        if module not in self.modules:
+            items = set()
+            self.modules[module] = items
+            return items
+        return self.modules[module]
+
+    def add_class(self, cls):
+        self.add_module_name(cls.__module__).add(cls.__name__)
+
+    def __str__(self):
+        data = ""
+        for name, items in sorted(self.modules.items()):
+            data += "from %s import %s\n" % (name, ",".join(sorted(items)))
+        data += "\n"
+        return data
+
+
+def clean_ref(ref):
+    return "#/$defs/" + "/".join(ref.split("/")[-2:])
+
+
+def action_generate_python(ref, property_names, schema_path):
+    with open(schema_path) as f:
+        schema = Schema(json.load(f))
+
+    ref = clean_ref(ref)
+
+    class_schema = schema.get_ref(ref)
+    class_name = class_name_from_full_ref(ref)
+    deps = PythonDependencies()
+    enum = False
+    properties = {}
+
+    if class_schema.get("type", "object") == "integer":
+        base = LottieEnum
+        enum = True
+        for i, val in enumerate(class_schema["oneOf"]):
+            properties[i] = SchemaProperty(None, val)
+    else:
+        get_all_properties(class_schema, properties)
+        if property_names:
+            properties = {k: v for k, v in properties.items() if k in property_names}
+
+        base = properties.pop("__base__", lottie.objects.LottieObject)
+
+        for prop in properties.values():
+            if prop.type_dep:
+                deps.add_class(prop.type_dep)
+
+    deps.add_class(base)
+    print(deps)
+    print("#ingroup Lottie")
+    print("class %s(%s):" % (class_name, base.__name__))
+    indent = " " * 4
+    desc = class_schema.get("description", "")
+    if desc:
+        for comment in ['"""!'] + desc.split("\n") + ['"""']:
+            print(indent + comment)
+
+    if enum:
+        for prop in properties.values():
+            if prop.description:
+                for line in prop.description.split("\n"):
+                    print(indent + "## " + line)
+            print(indent + prop.initialize())
+    else:
+        print(indent + "_props = [")
+        for prop in properties.values():
+            print(indent * 2 + prop.declare() + ",")
+        print(indent + "]")
+
+        print()
+        print(indent + "def __init__(self):")
+        print(indent * 2 + "super().__init__()")
+        print()
+        for prop in properties.values():
+            if prop.description:
+                for line in prop.description.split("\n"):
+                    print(indent * 2 + "## " + line)
+            print(indent * 2 + "self." + prop.initialize())
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("what", default=None, nargs="?")
-    parser.add_argument("--output", default=pathlib.Path("/tmp/json-schema"), type=pathlib.Path)
-    parser.add_argument("--schema", default="https://json-schema.org/draft/2020-12/schema")
-    parser.add_argument("--check", action="store_true")
+    sub = parser.add_subparsers(dest="action")
+
+    generate = sub.add_parser("generate", aliases=["g"])
+    generate.add_argument("what", default=None, nargs="?", help="Python class or module to generate")
+    generate.add_argument("--output", default=pathlib.Path("/tmp/json-schema"), type=pathlib.Path, help="Output path")
+    generate.add_argument("--schema", default="https://json-schema.org/draft/2020-12/schema", help="Metaschema URL")
+
+    check = sub.add_parser("check", aliases=["c"])
+    check.add_argument("what", default=None, nargs="?", help="Python class or module to check")
+    check.add_argument("--schema", required=True, help="Path to the schema file")
+
+    python = sub.add_parser("python", aliases=["py"], help="Generate python class")
+    python.add_argument("--schema", required=True, help="Path to the schema file")
+    python.add_argument("ref", help="$ref of the schema object to generate")
+    python.add_argument("properties", default=[], nargs="*", help="Properties to extract")
+
     ns = parser.parse_args()
+
+    if ns.action == "python":
+        action_generate_python(ns.ref, ns.properties, ns.schema)
+        sys.exit(0)
 
     subject = None
     what = ns.what
@@ -433,7 +661,7 @@ if __name__ == "__main__":
         for chunk in what.split("."):
             subject = getattr(subject, chunk)
 
-    if ns.check:
+    if ns.action == "check":
         action_check(subject, ns)
     else:
         action_output(subject, ns)
