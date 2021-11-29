@@ -239,7 +239,7 @@ class TestCustomObject(TestCase):
             obj.to_dict(),
             {
                 "ty": "rc",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [15, 25]},
                 "s": {"a": 0, "k": [10, 10]},
                 "r": {"a": 0, "k": 0},
@@ -252,7 +252,7 @@ class TestCustomObject(TestCase):
     def test_load(self):
         obj = Rect.load({
             "ty": "rc",
-            "d": 0,
+            "d": 1,
             "p": {"a": 0, "k": [15, 25]},
             "s": {"a": 0, "k": [10, 10]},
             "r": {"a": 0, "k": 0},
@@ -268,7 +268,7 @@ class TestCustomObject(TestCase):
     def test_load_norefresh(self):
         dic = {
             "ty": "rc",
-            "d": 0,
+            "d": 1,
             "p": {"a": 0, "k": [115, 125]},
             "s": {"a": 0, "k": [110, 110]},
             "r": {"a": 0, "k": 0},

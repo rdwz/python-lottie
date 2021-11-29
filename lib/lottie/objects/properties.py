@@ -174,8 +174,6 @@ class OffsetKeyframe(Keyframe):
     _props = [
         LottieProp("start", "s", NVector, False),
         LottieProp("end", "e", NVector, False),
-        LottieProp("in_tan", "ti", NVector, False),
-        LottieProp("out_tan", "to", NVector, False),
     ]
 
     def __init__(self, time=0, start=None, end=None, easing_function=None, in_tan=None, out_tan=None):
@@ -240,6 +238,8 @@ class AnimatableMixin:
         self.animated = False
         ## Keyframe list
         self.keyframes = None
+        ## Expression
+        self.expression = None
 
     def clear_animation(self, value):
         """!
@@ -392,6 +392,7 @@ class MultiDimensional(AnimatableMixin, LottieObject):
         LottieProp("property_index", "ix", int, False),
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", OffsetKeyframe, True, prop_animated),
+        LottieProp("expression", "x", str, False),
     ]
 
     def get_tangent_angle(self, time=0):
@@ -412,7 +413,19 @@ class MultiDimensional(AnimatableMixin, LottieObject):
         return 0
 
 
+## @ingroup Lottie
+class PositionKeyframe(OffsetKeyframe):
+    """!
+    Keyframe for Positional values
+    """
+    _props = [
+        LottieProp("in_tan", "ti", NVector, False),
+        LottieProp("out_tan", "to", NVector, False),
+    ]
+
+
 class PositionValue(MultiDimensional):
+    keyframe_type = PositionKeyframe
     _props = [
         LottieProp("value", "k", NVector, False, prop_not_animated),
         LottieProp("property_index", "ix", int, False),
@@ -459,6 +472,7 @@ class ColorValue(AnimatableMixin, LottieObject):
         LottieProp("property_index", "ix", int, False),
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", OffsetKeyframe, True, prop_animated),
+        LottieProp("expression", "x", str, False),
     ]
 
 
@@ -615,6 +629,7 @@ class Value(AnimatableMixin, LottieObject):
         LottieProp("property_index", "ix", int, False),
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", keyframe_type, True, prop_animated),
+        LottieProp("expression", "x", str, False),
     ]
 
     def __init__(self, value=0):
@@ -676,7 +691,7 @@ class ShapeProperty(AnimatableMixin, LottieObject):
     keyframe_type = ShapePropKeyframe
     _props = [
         LottieProp("value", "k", Bezier, False, prop_not_animated),
-        #LottieProp("expression", "x", str, False),
+        LottieProp("expression", "x", str, False),
         LottieProp("property_index", "ix", float, False),
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", keyframe_type, True, prop_animated),
@@ -684,3 +699,27 @@ class ShapeProperty(AnimatableMixin, LottieObject):
 
     def __init__(self, bezier=None):
         super().__init__(bezier or Bezier())
+
+
+#ingroup Lottie
+class SplitVector(LottieObject):
+    """!
+    An animatable property that is split into individually anaimated components
+    """
+    _props = [
+        LottieProp("split", "s", bool, False),
+        LottieProp("x", "x", Value, False),
+        LottieProp("y", "y", Value, False),
+        LottieProp("z", "z", Value, False),
+    ]
+
+    @property
+    def split(self):
+        return True
+
+    def __init__(self, x=0, y=0):
+        super().__init__()
+
+        self.x = Value(x)
+        self.y = Value(y)
+        self.z = None

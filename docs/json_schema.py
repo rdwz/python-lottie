@@ -28,6 +28,9 @@ name_map = {
     "Star": "polystar",
     "EffectValue": "effect-value",
     "Chars": "character-data",
+    "CharacterData": "character-data-shape",
+    "TransformShape": "transform",
+    "PositionValue": "position",
 }
 
 
@@ -452,6 +455,15 @@ def action_check(subject, ns):
         for type_name in group:
             all_defs.add("#/$defs/%s/%s" % (group_name, type_name))
 
+    all_defs.discard("#/$defs/helpers/color")
+    all_defs.discard("#/$defs/animated-properties/animated-property")
+    all_defs.discard("#/$defs/animated-properties/position")
+    all_defs.discard("#/$defs/animated-properties/position-keyframe")
+    all_defs.discard("#/$defs/animated-properties/shape-keyframe")
+    all_defs.discard("#/$defs/helpers/color")
+    all_defs.discard("#/$defs/helpers/int-boolean")
+    all_defs.discard("#/$defs/shapes/shape-list")
+
     if subject is None:
         for module in loop_modules():
             check_module(module, schema, all_defs)
@@ -474,11 +486,13 @@ class SchemaProperty:
     builtins = {
         "string": "str",
         "integer": "int",
-        "number": "float"
+        "number": "float",
+        "boolean": "bool"
     }
 
     def __init__(self, lottie_name, schema):
         self.lottie = lottie_name
+        self.schema = schema
         self.title = schema.get("title", lottie_name)
         if lottie_name is None:
             self.python = chunks_to_camel(self.title.lower().split())
@@ -495,7 +509,7 @@ class SchemaProperty:
                 self.type = "NVector"
                 self.is_list = False
             else:
-                self.get_type(items, schema)
+                self.get_type(items)
         else:
             self.get_type(schema)
             self.is_list = False
@@ -613,6 +627,13 @@ def action_generate_python(ref, property_names, schema_path):
                 for line in prop.description.split("\n"):
                     print(indent + "## " + line)
             print(indent + prop.initialize())
+    elif base is lottie.objects.Effect:
+        print(indent + "_effects = [")
+        for ef in properties["ef"].schema.get("prefixItems"):
+            print(indent*2 + "(%s, %s)," % (py_string(ef["title"]), class_name_from_full_ref(ef["$ref"])))
+        print(indent + "]")
+        print(indent + "## %Effect type.")
+        print(indent + properties["ty"].initialize())
     else:
         print(indent + "_props = [")
         for prop in properties.values():

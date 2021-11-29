@@ -9,21 +9,19 @@ class Transform(LottieObject):
     Layer transform
     """
     _props = [
-        LottieProp("anchor_point", "a", MultiDimensional, False),
+        LottieProp("anchor_point", "a", PositionValue, False),
         LottieProp("position", "p", PositionValue, False),
         LottieProp("scale", "s", MultiDimensional, False),
         LottieProp("rotation", "r", Value, False),
         LottieProp("opacity", "o", Value, False),
-        #LottieProp("position_x", "px", Value, False),
-        #LottieProp("position_y", "py", Value, False),
-        #LottieProp("position_z", "pz", Value, False),
         LottieProp("skew", "sk", Value, False),
         LottieProp("skew_axis", "sa", Value, False),
+        LottieProp("orientation", "or", MultiDimensional, False),
     ]
 
     def __init__(self):
         ## Transform Anchor Point
-        self.anchor_point = MultiDimensional(NVector(0, 0))
+        self.anchor_point = PositionValue(NVector(0, 0))
         ## Transform Position
         self.position = PositionValue(NVector(0, 0))
         ## Transform Scale
@@ -47,6 +45,8 @@ class Transform(LottieObject):
         ## Transform Skew Axis.
         ## An angle, if 0 skews on the X axis, if 90 skews on the Y axis
         self.skew_axis = Value(0)
+
+        self.orientation = None
 
     def to_matrix(self, time, auto_orient=False):
         from ..utils.transform import TransformMatrix
@@ -136,3 +136,42 @@ class Mask(VisualObject):
 
     def __str__(self):
         return self.name or super().__str__()
+
+
+## @ingroup Lottie
+class BlendMode(LottieEnum):
+    Normal = 0
+    Multiply = 1
+    Screen = 2
+    Overlay = 3
+    Darken = 4
+    Lighten = 5
+    ColorDodge = 6
+    ColorBurn = 7
+    HardLight = 8
+    SoftLight = 9
+    Difference = 10
+    Exclusion = 11
+    Hue = 12
+    Saturation = 13
+    Color = 14
+    Luminosity = 15
+
+
+#ingroup Lottie
+class Marker(LottieObject):
+    """!
+    Defines named portions of the composition.
+    """
+    _props = [
+        LottieProp("comment", "cm", str, False),
+        LottieProp("time", "tm", float, False),
+        LottieProp("duration", "dr", float, False),
+    ]
+
+    def __init__(self):
+        super().__init__()
+
+        self.comment = None
+        self.time = None
+        self.duration = None

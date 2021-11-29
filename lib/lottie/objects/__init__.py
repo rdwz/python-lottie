@@ -8,7 +8,7 @@ from . import (
 from .animation import Animation
 from .layers import *
 from .shapes import *
-from .assets import Precomp
+from .assets import Precomp, Image, Asset
 from .bezier import Bezier
 from .composition import Composition
 
@@ -19,5 +19,5 @@ __all__ = [
     "NullLayer", "TextLayer", "ShapeLayer", "ImageLayer", "PreCompLayer", "SolidColorLayer",
     "Rect", "Fill", "Trim", "Repeater", "GradientFill", "Stroke", "RoundedCorners", "Path",
     "TransformShape", "Group", "Star", "Ellipse", "Merge", "GradientStroke",
-    "Bezier", "Precomp", "Composition",
+    "Bezier", "Precomp", "Composition", "Image", "Asset"
 ]

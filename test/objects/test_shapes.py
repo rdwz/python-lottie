@@ -100,7 +100,7 @@ class TestRect(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "rc",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [0, 0]},
                 "s": {"a": 0, "k": [0, 0]},
                 "r": {"a": 0, "k": 0},
@@ -116,7 +116,7 @@ class TestRect(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "rc",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [30, 40]},
                 "s": {"a": 0, "k": [10, 20]},
                 "r": {"a": 0, "k": 0},
@@ -146,7 +146,7 @@ class TestStar(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "sr",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [0, 0]},
                 "ir": {"a": 0, "k": 0},
                 "is": {"a": 0, "k": 0},
@@ -169,7 +169,7 @@ class TestStar(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "sr",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [30, 40]},
                 "ir": {"a": 0, "k": 0},
                 "is": {"a": 0, "k": 0},
@@ -204,7 +204,7 @@ class TestEllipse(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "el",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [0, 0]},
                 "s": {"a": 0, "k": [0, 0]},
             }
@@ -219,7 +219,7 @@ class TestEllipse(base.TestCase):
             sh.to_dict(),
             {
                 "ty": "el",
-                "d": 0,
+                "d": 1,
                 "p": {"a": 0, "k": [30, 40]},
                 "s": {"a": 0, "k": [10, 20]},
                 "nm": "foo",

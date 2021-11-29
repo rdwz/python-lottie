@@ -5,8 +5,7 @@ from ..utils.color import Color
 from .helpers import VisualObject
 
 
-#5: EffectsManager,
-#11: MaskEffect,
+## @ingroup Lottie
 class EffectValue(VisualObject):
     """!
     Value for an effect
@@ -51,6 +50,7 @@ class Effect(VisualObject):
         LottieProp("effect_index", "ix", int, False),
         LottieProp("type", "ty", int, False),
         LottieProp("effects", "ef", EffectValue, True),
+        LottieProp("enabled", "en", bool, False),
     ]
     _effects = []
 
@@ -60,11 +60,8 @@ class Effect(VisualObject):
         self.effect_index = None
         ## Effect parameters
         self.effects = self._load_values(*args, **kwargs)
-
-        """
-        ## After Effect's Match Name. Used for expressions.
-        self.match_name = ""
-        """
+        ## Whether the effect is enabled
+        self.enabled = None
 
     @classmethod
     def _load_get_class(cls, lottiedict):
@@ -398,3 +395,90 @@ class CustomEffect(Effect):
     _effects = []
     ## %Effect type.
     type = 5
+
+
+#ingroup Lottie
+class MeshWarpEffect(Effect):
+    _effects = [
+        ("Rows", EffectValueSlider),
+        ("Columns", EffectValueSlider),
+        ("Quality", EffectValueSlider),
+        ("03", EffectNoValue),
+    ]
+    ## %Effect type.
+    type = 31
+
+
+#ingroup Lottie
+class DisplacementMapEffect(Effect):
+    _effects = [
+        ("Displacement Map Layer", EffectValueLayer),
+        ("Use For Horizontal Displacement", EffectValueDropDown),
+        ("Max Horizontal Displacement", EffectValueSlider),
+        ("Use For Vertical Displacement", EffectValueDropDown),
+        ("Max Vertical Displacement", EffectValueSlider),
+        ("Displacement Map Behavior", EffectValueDropDown),
+        ("Edge Behavior", EffectValueDropDown),
+        ("Expand Output", EffectValueDropDown),
+    ]
+    ## %Effect type.
+    type = 27
+
+
+#ingroup Lottie
+class PaintOverTransparentEffect(Effect):
+    _effects = [
+        ("00", EffectValueSlider)
+    ]
+    ## %Effect type.
+    type = 7
+
+
+#ingroup Lottie
+class PuppetEffect(Effect):
+    _effects = [
+        ("Puppet Engine", EffectValueDropDown),
+        ("Mesh Rotation Refinement", EffectValueSlider),
+        ("On Transparent", EffectValueDropDown),
+        ("03", EffectNoValue),
+    ]
+    ## %Effect type.
+    type = 34
+
+
+#ingroup Lottie
+class RadialWipeEffect(Effect):
+    _effects = [
+        ("Completion", EffectValueSlider),
+        ("Start Angle", EffectValueAngle),
+        ("Wipe Center", EffectValuePoint),
+        ("Wipe", EffectValueSlider),
+        ("Feather", EffectValueSlider),
+    ]
+    ## %Effect type.
+    type = 26
+
+
+#ingroup Lottie
+class SpherizeEffect(Effect):
+    _effects = [
+        ("radius", EffectValueSlider),
+        ("center", EffectValuePoint),
+    ]
+    ## %Effect type.
+    effect_type = 33
+
+
+#ingroup Lottie
+class WavyEffect(Effect):
+    _effects = [
+        ("Radius", EffectValueSlider),
+        ("Center", EffectValuePoint),
+        ("Conversion type", EffectValueDropDown),
+        ("Speed", EffectValueDropDown),
+        ("Width", EffectValueSlider),
+        ("Height", EffectValueSlider),
+        ("Phase", EffectValueSlider),
+    ]
+    ## %Effect type.
+    type = 32

@@ -3,7 +3,7 @@ from .layers import Layer
 from .assets import Asset, Precomp
 from .text import FontList, Chars
 from .composition import Composition
-from .helpers import VisualObject
+from .helpers import VisualObject, Marker
 
 ##\defgroup Lottie Lottie
 #
@@ -35,6 +35,29 @@ class Metadata(LottieObject):
         self.theme_color = None
 
 
+#ingroup Lottie
+class MotionBlur(LottieObject):
+    """!
+    Motion blur settings
+    """
+    _props = [
+        LottieProp("shutter_angle", "sa", float, False),
+        LottieProp("shutter_phase", "sp", float, False),
+        LottieProp("samples_per_frame", "spf", float, False),
+        LottieProp("adaptive_sample_limit", "asl", float, False),
+    ]
+
+    def __init__(self):
+        super().__init__()
+
+        ## Angle in degrees
+        self.shutter_angle = None
+        ## Angle in degrees
+        self.shutter_phase = None
+        self.samples_per_frame = None
+        self.adaptive_sample_limit = None
+
+
 ## @ingroup Lottie
 class Animation(Composition, VisualObject):
     """!
@@ -54,8 +77,8 @@ class Animation(Composition, VisualObject):
         #LottieProp("comps", "comps", Animation, True),
         LottieProp("fonts", "fonts", FontList),
         LottieProp("chars", "chars", Chars, True),
-        #LottieProp("markers", "markers", Marker, True),
-        #LottieProp("motion_blur", "mb", MotionBlur, False),
+        LottieProp("markers", "markers", Marker, True),
+        LottieProp("motion_blur", "mb", MotionBlur, False),
         LottieProp("metadata", "meta", Metadata, False)
     ]
     _version = "5.5.2"
@@ -84,6 +107,8 @@ class Animation(Composition, VisualObject):
         ## Available fonts
         self.fonts = None
         self.metadata = None
+        self.motion_blur = None
+        self.markers = None
 
     def precomp(self, name):
         for ass in self.assets:

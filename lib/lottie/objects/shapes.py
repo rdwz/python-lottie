@@ -1,8 +1,8 @@
 import math
 from .base import LottieObject, LottieProp, LottieEnum, NVector
-from .properties import Value, MultiDimensional, GradientColors, ShapeProperty, Bezier, ColorValue
+from .properties import Value, MultiDimensional, GradientColors, ShapeProperty, Bezier, ColorValue, PositionValue
 from ..utils.color import Color
-from .helpers import Transform, VisualObject
+from .helpers import Transform, VisualObject, BlendMode
 
 
 class BoundingBox:
@@ -77,7 +77,7 @@ class ShapeElement(VisualObject):
         LottieProp("hidden", "hd", bool, False),
         LottieProp("type", "ty", str, False),
         LottieProp("property_index", "cix", int, False),
-        LottieProp("bm", "bm", int, False),
+        LottieProp("blend_mode", "bm", BlendMode, False),
     ]
     ## %Shape type.
     type = None
@@ -89,8 +89,8 @@ class ShapeElement(VisualObject):
         self.property_index = None
         ## Hide element
         self.hidden = None
-        ## @todo figure out?
-        self.bm = None
+        ## Blend mode
+        self.blend_mode = None
 
     def bounding_box(self, time=0):
         """!
@@ -119,7 +119,7 @@ class ShapeElement(VisualObject):
 #ingroup Lottie
 class ShapeDirection(LottieEnum):
     ## Usually clockwise
-    Normal = 0
+    Normal = 1
     ## Usually counter clockwise
     Reversed = 3
 
@@ -151,7 +151,7 @@ class Rect(Shape):
     A simple rectangle shape
     """
     _props = [
-        LottieProp("position", "p", MultiDimensional, False),
+        LottieProp("position", "p", PositionValue, False),
         LottieProp("size", "s", MultiDimensional, False),
         LottieProp("rounded", "r", Value, False),
     ]
@@ -161,7 +161,7 @@ class Rect(Shape):
     def __init__(self, pos=None, size=None, rounded=0):
         Shape.__init__(self)
         ## Rect's position
-        self.position = MultiDimensional(pos or NVector(0, 0))
+        self.position = PositionValue(pos or NVector(0, 0))
         ## Rect's size
         self.size = MultiDimensional(size or NVector(0, 0))
         ## Rect's rounded corners
@@ -241,7 +241,7 @@ class Star(Shape):
     Star shape
     """
     _props = [
-        LottieProp("position", "p", MultiDimensional, False),
+        LottieProp("position", "p", PositionValue, False),
         LottieProp("inner_radius", "ir", Value, False),
         LottieProp("inner_roundness", "is", Value, False),
         LottieProp("outer_radius", "or", Value, False),
@@ -256,7 +256,7 @@ class Star(Shape):
     def __init__(self):
         Shape.__init__(self)
         ## Star's position
-        self.position = MultiDimensional(NVector(0, 0))
+        self.position = PositionValue(NVector(0, 0))
         ## Star's inner radius. (Star only)
         self.inner_radius = Value()
         ## Star's inner roundness. (Star only)
@@ -719,8 +719,8 @@ class Modifier(ShapeElement):
 
 ## @ingroup Lottie
 class TrimMultipleShapes(LottieEnum):
-    Simultaneously = 1
-    Individually = 2
+    Individually = 1
+    Simultaneously = 2
 
 
 ## @ingroup Lottie

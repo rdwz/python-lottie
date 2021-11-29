@@ -143,6 +143,7 @@ class Image(Asset):
 class Precomp(Asset, Composition):
     _props = [
         LottieProp("name", "nm", str, False),
+        LottieProp("frame_rate", "fr", float, False),
     ]
 
     def __init__(self, id="", animation=None):
@@ -153,6 +154,7 @@ class Precomp(Asset, Composition):
         if animation:
             self.animation.assets.append(self)
         self.name = None
+        self.frame_rate = None
 
     def _on_prepare_layer(self, layer):
         if self.animation:

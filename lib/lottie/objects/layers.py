@@ -1,30 +1,10 @@
 import warnings
 from .base import LottieObject, LottieProp, PseudoBool, LottieEnum
 from .effects import Effect
-from .helpers import Transform, Mask, VisualObject
+from .helpers import Transform, Mask, VisualObject, BlendMode
 from .shapes import ShapeElement
 from .text import TextAnimatorData
 from .properties import Value
-
-
-## @ingroup Lottie
-class BlendMode(LottieEnum):
-    Normal = 0
-    Multiply = 1
-    Screen = 2
-    Overlay = 3
-    Darken = 4
-    Lighten = 5
-    ColorDodge = 6
-    ColorBurn = 7
-    HardLight = 8
-    SoftLight = 9
-    Difference = 10
-    Exclusion = 11
-    Hue = 12
-    Saturation = 13
-    Color = 14
-    Luminosity = 15
 
 
 ## @ingroup Lottie
@@ -56,8 +36,10 @@ class Layer(VisualObject):
 
         LottieProp("matte_mode", "tt", MatteMode, False),
         LottieProp("index", "ind", int, False),
-        #LottieProp("css_class", "cl", str, False),
-        #LottieProp("layer_html_id", "ln", str, False),
+        LottieProp("css_class", "cl", str, False),
+        LottieProp("layer_xml_id", "ln", str, False),
+        LottieProp("motion_blur", "mb", bool, False),
+
         LottieProp("has_masks", "hasMask", bool, False),
         LottieProp("masks", "masksProperties", Mask, True),
         LottieProp("effects", "ef", Effect, True),
@@ -88,12 +70,13 @@ class Layer(VisualObject):
         ## Layer index in AE. Used for parenting and expressions.
         self.index = None
 
-        """
-        # Parsed layer name used as html class on SVG/HTML renderer
-        #self.css_class = ""
-        # Parsed layer name used as html id on SVG/HTML renderer
-        #self.layer_html_id = ""
-        """
+        ## CSS class used by the SVG renderer
+        self.css_class = None
+        ## `id` attribute used by the SVG renderer
+        self.layer_xml_id = None
+        ## Whether motion blur is enable for the layer
+        self.motion_blur = None
+
         ## In Point of layer. Sets the initial frame of the layer.
         self.in_point = None
         ## Out Point of layer. Sets the final frame of the layer.

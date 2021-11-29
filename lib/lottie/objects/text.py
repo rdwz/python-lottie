@@ -1,5 +1,5 @@
 from .base import LottieObject, LottieProp, LottieEnum
-from .properties import Value, MultiDimensional
+from .properties import Value, MultiDimensional, ColorValue, Color
 from ..nvector import NVector
 from .helpers import Transform
 from .shapes import ShapeElement
@@ -33,8 +33,8 @@ class TextAnimatorDataProperty(Transform):
         LottieProp("rotate_x", "rx", Value),
         LottieProp("rotate_y", "ry", Value),
         LottieProp("stroke_width", "sw", Value),
-        LottieProp("stroke_color", "sc", MultiDimensional),
-        LottieProp("fill_color", "fc", MultiDimensional),
+        LottieProp("stroke_color", "sc", ColorValue),
+        LottieProp("fill_color", "fc", ColorValue),
         LottieProp("fill_hue", "fh", Value),
         LottieProp("fill_saturation", "fs", Value),
         LottieProp("fill_brightness", "fb", Value),
@@ -116,7 +116,7 @@ class TextDocument(LottieObject):
     """
     _props = [
         LottieProp("font_family", "f", str),
-        LottieProp("color", "fc", NVector),
+        LottieProp("color", "fc", Color),
         LottieProp("font_size", "s", float),
         LottieProp("line_height", "lh", float),
         LottieProp("wrap_size", "sz", NVector),
@@ -129,7 +129,7 @@ class TextDocument(LottieObject):
     def __init__(self, text="", font_size=10, color=None, font_family=""):
         self.font_family = font_family
         ## Text color
-        self.color = color or NVector(0, 0, 0)
+        self.color = color or Color(0, 0, 0)
         ## Line height when wrapping
         self.line_height = None
         ## Text alignment
