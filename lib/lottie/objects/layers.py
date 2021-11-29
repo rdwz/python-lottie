@@ -74,7 +74,7 @@ class Layer(VisualObject):
         self.css_class = None
         ## `id` attribute used by the SVG renderer
         self.layer_xml_id = None
-        ## Whether motion blur is enable for the layer
+        ## Whether motion blur is enabled for the layer
         self.motion_blur = None
 
         ## In Point of layer. Sets the initial frame of the layer.
