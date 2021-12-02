@@ -108,7 +108,7 @@ class ShapeElement(VisualObject):
     @classmethod
     def _load_sub(cls, dict):
         for sc in cls.__subclasses__():
-            if sc.type:
+            if sc.type and sc.type not in dict:
                 dict[sc.type] = sc
             sc._load_sub(dict)
 

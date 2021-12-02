@@ -127,7 +127,7 @@ class Animation(Composition, VisualObject):
         Turns the main comp into a precomp
         """
         precomp = Precomp()
-        precomp.frame_rate = self.frame_rate
+        #precomp.frame_rate = self.frame_rate
         precomp.layers = self.layers
         precomp.name = self.name
         name_id = 0
