@@ -1,5 +1,5 @@
 from .base import LottieObject, LottieProp, PseudoBool, Index
-from .layers import Layer
+from .layers import Layer, PreCompLayer
 from .assets import Asset, Precomp
 from .text import FontList, Chars
 from .composition import Composition
@@ -122,35 +122,57 @@ class Animation(Composition, VisualObject):
         if layer.out_point is None:
             layer.out_point = self.out_point
 
+    def to_precomp(self):
+        """!
+        Turns the main comp into a precomp
+        """
+        precomp = Precomp()
+        precomp.frame_rate = self.frame_rate
+        precomp.layers = self.layers
+        precomp.name = self.name
+        name_id = 0
+        base_name = self.name or "Animation"
+        name = base_name
+        index = 0
+        while True:
+            if index >= len(self.assets):
+                break
+
+            while self.assets[index].id == name:
+                name_id += 1
+                name = "%s %s" % (base_name, name_id)
+                index = -1
+
+            index += 1
+        precomp.id = name
+        self.assets.append(precomp)
+
+        precomp_layer = PreCompLayer()
+        precomp_layer.width = self.width
+        precomp_layer.height = self.height
+        precomp_layer.in_point = self.in_point
+        precomp_layer.out_point = self.out_point
+        precomp_layer.reference_id = name
+        self.layers = [precomp_layer]
+
+    def scale(self, width, height):
+        """!
+        Scales the animation so it fits in width/height
+        """
+        if self.width != width or self.height != height:
+            self.to_precomp()
+
+            scale = min(width/self.width, height/self.height)
+            self.width = width
+            self.height = height
+
+            self.layers[0].transform.scale.value *= scale
+
     def tgs_sanitize(self):
         """!
         Cleans up some things to ensure it works as a telegram sticker
         """
-        if self.width != 512 or self.height != 512:
-            scale = min(512/self.width, 512/self.height)
-            self.width = self.height = 512
-
-            for layer in self.layers:
-                if layer.parent_index:
-                    continue
-
-                if layer.transform.scale.animated:
-                    for kf in layer.transform.scale.keyframes:
-                        if kf.start is not None:
-                            kf.start *= scale
-                        if kf.end is not None:
-                            kf.end *= scale
-                else:
-                    layer.transform.scale.value *= scale
-
-                if layer.transform.position.animated:
-                    for kf in layer.transform.position.keyframes:
-                        if kf.start is not None:
-                            kf.start *= scale
-                        if kf.end is not None:
-                            kf.end *= scale
-                else:
-                    layer.transform.position.value *= scale
+        self.scale(512, 512)
 
         if self.frame_rate < 45:
             self.frame_rate = 30

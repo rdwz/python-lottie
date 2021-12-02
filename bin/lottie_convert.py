@@ -87,6 +87,18 @@ group.add_argument(
     type=int,
     help="If present, changes the output fps to match this value"
 )
+group.add_argument(
+    "--width",
+    default=None,
+    type=int,
+    help="Override output width",
+)
+group.add_argument(
+    "--height",
+    default=None,
+    type=int,
+    help="Override output height",
+)
 
 
 def print_dep_message(loader):
@@ -149,6 +161,15 @@ if __name__ == "__main__":
 
     if ns.fps:
         an.frame_rate = ns.fps
+
+    if ns.width or ns.height:
+        width = ns.width
+        height = ns.height
+        if not width:
+            width = an.width * height / an.height
+        if not height:
+            height = an.height * width / an.width
+        an.scale(width, height)
 
     if ns.optimize == 1:
         float_strip(an)
