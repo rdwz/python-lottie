@@ -248,8 +248,8 @@ def raster_to_linked_assets(filenames, frame_delay=1, framerate=60):
         asset = objects.assets.Image.linked(filename)
         animation.assets.append(asset)
         layer = animation.add_layer(objects.ImageLayer(asset.id))
-        layer.in_point = time
-        layer.out_point = layer.in_point + duration
+        layer.in_point = frame * frame_delay
+        layer.out_point = layer.in_point + frame_delay
 
     return animation
 
