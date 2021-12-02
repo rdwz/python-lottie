@@ -215,7 +215,6 @@ def _vectorizing_func(filenames, frame_delay, framerate, callback):
             image_duration = raster.info.get("duration", 0)
             if image_duration:
                 duration = framerate * image_duration / 1000
-            print(time)
             callback(animation, new_im, nframes + frame, time, duration)
             time += duration
             new_im.close()
