@@ -152,6 +152,7 @@ def pixel_add_layer_rects(animation, raster):
         for x in range(raster.width):
             colort = raster.getpixel((x, y))
             if colort[-1] == 0:
+                last_color = 0
                 continue
             yrect = last_rects.get(x, None)
             if colort == last_color:
@@ -200,20 +201,27 @@ def _vectorizing_func(filenames, frame_delay, framerate, callback):
         if nframes == 0:
             animation.width = raster.width
             animation.height = raster.height
+
         if not hasattr(raster, "is_animated"):
             raster.n_frames = 1
             raster.seek = lambda x: None
+
+        time = 0
         for frame in range(raster.n_frames):
             raster.seek(frame)
             new_im = Image.new("RGBA", raster.size)
             new_im.paste(raster)
-            callback(animation, new_im, nframes + frame)
+            duration = frame_delay
+            image_duration = raster.info.get("duration", 0)
+            if image_duration:
+                duration = framerate * image_duration / 1000
+            print(time)
+            callback(animation, new_im, nframes + frame, time, duration)
+            time += duration
             new_im.close()
         nframes += raster.n_frames
 
-    animation.out_point = frame_delay * nframes
-    #animation._nframes = nframes
-
+    animation.out_point = time
     return animation
 
 
@@ -221,12 +229,12 @@ def raster_to_embedded_assets(filenames, frame_delay=1, framerate=60, embed_form
     """!
     @brief Loads external assets
     """
-    def callback(animation, raster, frame):
+    def callback(animation, raster, frame, time, duration):
         asset = objects.assets.Image.embedded(raster, embed_format)
         animation.assets.append(asset)
         layer = animation.add_layer(objects.ImageLayer(asset.id))
-        layer.in_point = frame * frame_delay
-        layer.out_point = layer.in_point + frame_delay
+        layer.in_point = time
+        layer.out_point = layer.in_point + duration
 
     return _vectorizing_func(filenames, frame_delay, framerate, callback)
 
@@ -241,8 +249,8 @@ def raster_to_linked_assets(filenames, frame_delay=1, framerate=60):
         asset = objects.assets.Image.linked(filename)
         animation.assets.append(asset)
         layer = animation.add_layer(objects.ImageLayer(asset.id))
-        layer.in_point = frame * frame_delay
-        layer.out_point = layer.in_point + frame_delay
+        layer.in_point = time
+        layer.out_point = layer.in_point + duration
 
     return animation
 
@@ -251,10 +259,10 @@ def pixel_to_animation(filenames, frame_delay=1, framerate=60):
     """!
     @brief Converts pixel art to vector
     """
-    def callback(animation, raster, frame):
+    def callback(animation, raster, frame, time, duration):
         layer = pixel_add_layer_rects(animation, raster.convert("RGBA"))
-        layer.in_point = frame * frame_delay
-        layer.out_point = layer.in_point + frame_delay
+        layer.in_point = time
+        layer.out_point = layer.in_point + duration
 
     return _vectorizing_func(filenames, frame_delay, framerate, callback)
 
@@ -267,9 +275,9 @@ def pixel_to_animation_paths(filenames, frame_delay=1, framerate=60):
     but it produces a single shape for each area with the same color.
     Mostly useful when you want to add your own animations to the loaded image
     """
-    def callback(animation, raster, frame):
+    def callback(animation, raster, frame, time, duration):
         layer = pixel_add_layer_paths(animation, raster.convert("RGBA"))
-        layer.in_point = frame * frame_delay
-        layer.out_point = layer.in_point + frame_delay
+        layer.in_point = time
+        layer.out_point = layer.in_point + duration
 
     return _vectorizing_func(filenames, frame_delay, framerate, callback)
