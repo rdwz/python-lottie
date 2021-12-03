@@ -291,7 +291,6 @@ class TestAnimation(base.TestCase):
                 "assets": [
                     {
                         "id": "Animation",
-                        "fr": 69,
                         "layers": [
                             {
                                 "ty": 3,
@@ -406,7 +405,6 @@ class TestAnimation(base.TestCase):
                 "assets": [
                     {
                         "id": "Animation",
-                        "fr": 69,
                         "layers": [
                             {
                                 "ty": 3,
