@@ -137,10 +137,10 @@ def parse_color(color, current_color=Color(0, 0, 0, 1)):
 
     @see https://www.w3.org/wiki/CSS/Properties/color
     """
-    # #fff
+    # #112233
     if re.match(r"^#[0-9a-fA-F]{6}$", color):
         return Color(int(color[1:3], 16) / 0xff, int(color[3:5], 16) / 0xff, int(color[5:7], 16) / 0xff, 1)
-    # #112233
+    # #fff
     if re.match(r"^#[0-9a-fA-F]{3}$", color):
         return Color(int(color[1], 16) / 0xf, int(color[2], 16) / 0xf, int(color[3], 16) / 0xf, 1)
     # rgba(123, 123, 123, 0.7)
