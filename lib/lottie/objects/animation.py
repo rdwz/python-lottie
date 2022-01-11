@@ -154,6 +154,7 @@ class Animation(Composition, VisualObject):
         precomp_layer.out_point = self.out_point
         precomp_layer.reference_id = name
         self.layers = [precomp_layer]
+        return precomp
 
     def scale(self, width, height):
         """!

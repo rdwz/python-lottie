@@ -788,10 +788,10 @@ class RoundedCorners(Modifier):
     ## %Shape type.
     type = "rd"
 
-    def __init__(self):
+    def __init__(self, radius=0):
         Modifier.__init__(self)
         ## Rounded Corner Radius
-        self.radius = Value()
+        self.radius = Value(radius)
 
 
 ## @ingroup Lottie

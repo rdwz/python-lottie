@@ -41,7 +41,7 @@ class TransformStip(Strip):
 
     def transform_unset(self, object, prop_name, value):
         prop = getattr(object, prop_name)
-        if not prop.animated and prop.value == value:
+        if prop and not prop.animated and prop.value == value:
             setattr(object, prop_name, None)
 
 
