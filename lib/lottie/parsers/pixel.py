@@ -195,9 +195,14 @@ def _vectorizing_func(filenames, frame_delay, framerate, callback):
 
     animation = objects.Animation(0, framerate)
     nframes = 0
+    time = 0
 
     for filename in filenames:
-        raster = Image.open(filename)
+        if isinstance(filename, Image.Image):
+            raster = filename
+        else:
+            raster = Image.open(filename)
+
         if nframes == 0:
             animation.width = raster.width
             animation.height = raster.height
@@ -206,7 +211,6 @@ def _vectorizing_func(filenames, frame_delay, framerate, callback):
             raster.n_frames = 1
             raster.seek = lambda x: None
 
-        time = 0
         for frame in range(raster.n_frames):
             raster.seek(frame)
             new_im = Image.new("RGBA", raster.size)
