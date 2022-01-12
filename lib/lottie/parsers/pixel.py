@@ -1,7 +1,7 @@
 from PIL import Image
 from .. import objects
 from .. import NVector, Color
-from ..utils import color
+from ..utils.color import from_uint8
 
 
 class Polygen:
@@ -45,17 +45,18 @@ class Polygen:
         else:
             raise ValueError()
 
-    def _to_rect(self, id1, id2):
-        p1 = self.vertices[id1]
-        p2 = self.vertices[id2]
+    def _to_rect(self, id1, id2, scale):
+        p1 = self.vertices[id1] * scale
+        p2 = self.vertices[id2] * scale
         return objects.Rect((p1+p2)/2, p2-p1)
 
-    def to_shape(self):
+    def to_shape(self, scale):
         if not self._has_x or not self._has_y:
-            return self._to_rect(0, int(len(self.vertices)/2))
+            return self._to_rect(0, int(len(self.vertices)/2), scale)
         bez = objects.Bezier()
         bez.closed = True
         for point in self.vertices:
+            point = point * scale
             if len(bez.vertices) > 1 and (
                 bez.vertices[-1].x == bez.vertices[-2].x == point.x or
                 bez.vertices[-1].y == bez.vertices[-2].y == point.y
@@ -71,11 +72,13 @@ class Polygen:
         return objects.Path(bez)
 
 
-def pixel_add_layer_paths(animation, raster):
-    layer = animation.add_layer(objects.ShapeLayer())
+def pixel_to_layer_paths(raster, scale=1, stroke_width=None):
+    layer = objects.ShapeLayer()
     groups = {}
     processed = set()
     xneg_candidates = set()
+    if stroke_width is None:
+        stroke_width = 0.1 * scale
 
     def avail(x, y):
         rid = (x, y)
@@ -114,18 +117,37 @@ def pixel_add_layer_paths(animation, raster):
                 xneg_candidates -= processed
 
             g = groups.setdefault(colort, set())
-            g.add(gen.to_shape())
+            g.add(gen.to_shape(scale))
 
     for colort, rects in groups.items():
-        g = layer.add_shape(objects.Group())
-        g.shapes = list(rects) + g.shapes
-        g.name = "".join("%02x" % c for c in colort)
-        fill = g.add_shape(objects.Fill())
-        fill.color.value = color.from_uint8(*colort[:3])
-        fill.opacity.value = colort[-1] / 255 * 100
-        stroke = g.add_shape(objects.Stroke(fill.color.value, 0.1))
-        stroke.opacity.value = fill.opacity.value
+        for rect in rects:
+            g = layer.add_shape(objects.Group())
+            g.shapes = [rect] + g.shapes
+            g.name = "".join("%02x" % c for c in colort)
+            color = from_uint8(*colort[:3])
+            opacity = colort[-1] / 255 * 100
+            stroke = g.add_shape(objects.Stroke(NVector(0, 0, 0), stroke_width))
+            fill = g.add_shape(objects.Fill())
+            fill.color.value = color
+            fill.opacity.value = 20
+
+    #for colort, rects in groups.items():
+        #g = layer.add_shape(objects.Group())
+        #g.shapes = list(rects) + g.shapes
+        #g.name = "".join("%02x" % c for c in colort)
+        #color = from_uint8(*colort[:3])
+        #opacity = colort[-1] / 255 * 100
+        #fill = g.add_shape(objects.Fill())
+        #fill.color.value = color
+        #fill.opacity.value = opacity
+        #stroke = g.add_shape(objects.Stroke(color, stroke_width))
+        #stroke.opacity.value = opacity
+
     return layer
+
+
+def pixel_add_layer_paths(animation, raster):
+    return animation.add_layer(pixel_to_layer_paths(raster))
 
 
 def pixel_add_layer_rects(animation, raster):
@@ -182,7 +204,7 @@ def pixel_add_layer_rects(animation, raster):
         g.shapes = list(rects) + g.shapes
         g.name = "".join("%02x" % c for c in colort)
         fill = g.add_shape(objects.Fill())
-        fill.color.value = color.from_uint8(*colort[:3])
+        fill.color.value = from_uint8(*colort[:3])
         fill.opacity.value = colort[-1] / 255 * 100
         stroke = g.add_shape(objects.Stroke(fill.color.value, 0.1))
         stroke.opacity.value = fill.opacity.value
