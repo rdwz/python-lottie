@@ -119,29 +119,31 @@ def pixel_to_layer_paths(raster, scale=1, stroke_width=None):
             g = groups.setdefault(colort, set())
             g.add(gen.to_shape(scale))
 
-    for colort, rects in groups.items():
-        for rect in rects:
-            g = layer.add_shape(objects.Group())
-            g.shapes = [rect] + g.shapes
-            g.name = "".join("%02x" % c for c in colort)
-            color = from_uint8(*colort[:3])
-            opacity = colort[-1] / 255 * 100
-            stroke = g.add_shape(objects.Stroke(NVector(0, 0, 0), stroke_width))
-            fill = g.add_shape(objects.Fill())
-            fill.color.value = color
-            fill.opacity.value = 20
-
+    # Debug
     #for colort, rects in groups.items():
-        #g = layer.add_shape(objects.Group())
-        #g.shapes = list(rects) + g.shapes
-        #g.name = "".join("%02x" % c for c in colort)
-        #color = from_uint8(*colort[:3])
-        #opacity = colort[-1] / 255 * 100
-        #fill = g.add_shape(objects.Fill())
-        #fill.color.value = color
-        #fill.opacity.value = opacity
-        #stroke = g.add_shape(objects.Stroke(color, stroke_width))
-        #stroke.opacity.value = opacity
+        #for rect in rects:
+            #g = layer.add_shape(objects.Group())
+            #g.shapes = [rect] + g.shapes
+            #g.name = "".join("%02x" % c for c in colort)
+            #color = from_uint8(*colort[:3])
+            #opacity = colort[-1] / 255 * 100
+            #stroke = g.add_shape(objects.Stroke(NVector(0, 0, 0), stroke_width))
+            #fill = g.add_shape(objects.Fill())
+            #fill.color.value = color
+            #fill.opacity.value = 20
+
+    for colort, rects in groups.items():
+        g = layer.add_shape(objects.Group())
+        g.shapes = list(rects) + g.shapes
+        g.name = "".join("%02x" % c for c in colort)
+        color = from_uint8(*colort[:3])
+        opacity = colort[-1] / 255 * 100
+        fill = g.add_shape(objects.Fill())
+        fill.color.value = color
+        fill.opacity.value = opacity
+        if stroke_width > 0:
+            stroke = g.add_shape(objects.Stroke(color, stroke_width))
+            stroke.opacity.value = opacity
 
     return layer
 
