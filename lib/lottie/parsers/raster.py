@@ -169,5 +169,3 @@ def raster_to_animation(
     animation = _vectorizing_func(filenames, frame_delay, framerate, callback)
 
     return animation
-
-
