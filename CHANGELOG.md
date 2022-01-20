@@ -1,4 +1,4 @@
-## Unreleased
+## 0.6.11 - 2022-01-20
  * Fancy text formatting renderer
  * Added PuckerBloat support
  * Fixed SVG conversion when the transform is missing
