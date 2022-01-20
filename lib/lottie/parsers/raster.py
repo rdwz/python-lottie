@@ -12,52 +12,90 @@ class QuanzationMode(enum.Enum):
     Exact = 2
 
 
-class RasterImage:
-    def __init__(self, image):
-        self.image = image
+class PaletteAlgorithm:
+    def get_colors(self, image, n_colors):
+        pass
 
-    #@classmethod
-    #def open(cls, filename):
-        #return cls.from_pil(Image.open(filename))
 
-    def quantize(self, n_colors):
+class KMeansPalette(PaletteAlgorithm):
+    def __init__(self, iterations=100, match=glaxnimate.utils.quantize.MatchType.MostFrequent):
+        self.iterations = iterations
+        self.match = match
+
+    def get_colors(self, image, n_colors):
+        return glaxnimate.utils.quantize.k_means(image, n_colors, self.iterations, self.match)
+
+
+class OctreePalette(PaletteAlgorithm):
+    def get_colors(self, image, n_colors):
+        return glaxnimate.utils.quantize.octree(image, n_colors)
+
+
+class KModesPalette(PaletteAlgorithm):
+    def get_colors(self, image, n_colors):
+        return glaxnimate.utils.quantize.k_modes(image, n_colors)
+
+
+class TraceOptions:
+    def __init__(self, color_mode=QuanzationMode.Nearest, palette_algorithm=OctreePalette(), tolerance=100, stroke_width=1):
+        self.trace_options = glaxnimate.utils.trace.TraceOptions()
+        self.palette_algorithm = palette_algorithm
+        self.color_mode = color_mode
+        self.tolerance = tolerance
+        self.stroke_width = stroke_width
+
+    @property
+    def smoothness(self):
+        return self.trace_options.smoothness
+
+    @smoothness.setter
+    def smoothness(self, value):
+        self.trace_options.smoothness = value
+
+    @property
+    def min_area(self):
+        return self.trace_options.min_area
+
+    @min_area.setter
+    def min_area(self, value):
+        self.trace_options.min_area = value
+
+    def quantize(self, image, n_colors):
         """!
         Returns a list of RGB values
         """
-        return glaxnimate.utils.quantize.octree(self.image, n_colors)
+        return self.palette_algorithm.get_colors(image, n_colors)
 
-    def trace(self, codebook, quantization_mode=QuanzationMode.Nearest):
+    def trace(self, image, codebook):
         """!
         Returns a list of tuple [color, data] where for each color in codebook
         data is a list of bezier
 
-        You can get codebook from quantize
+        You can get codebook from quantize()
         """
 
-        options = glaxnimate.utils.trace.TraceOptions()
-
         if codebook is None or len(codebook) == 0:
-            tracer = glaxnimate.utils.trace.Tracer(self.image, options)
+            tracer = glaxnimate.utils.trace.Tracer(image, self.trace_options)
             tracer.set_target_alpha(128, False)
             return [glaxnimate.utils.Color(0, 0, 0), tracer.trace()]
 
-        if quantization_mode == QuanzationMode.Nearest:
-            return list(zip(codebook, glaxnimate.utils.trace.quantize_and_trace(self.image, options, codebook)))
+        if self.color_mode == QuanzationMode.Nearest:
+            return list(zip(codebook, glaxnimate.utils.trace.quantize_and_trace(image, self.trace_options, codebook)))
 
         mono_data = []
-        tracer = glaxnimate.utils.trace.Tracer(self.image, options)
+        tracer = glaxnimate.utils.trace.Tracer(image, self.trace_options)
         for color in codebook:
-            tracer.set_target_color(color, 100)
+            tracer.set_target_color(color, self.tolerance)
             mono_data.append((color, tracer.trace()))
 
         return mono_data
 
 
 class Vectorizer:
-    def __init__(self, stroke_width):
+    def __init__(self, trace_options: TraceOptions):
         self.palette = None
         self.layers = {}
-        self.stroke_width = stroke_width
+        self.trace_options = trace_options
 
     def _create_layer(self, animation, layer_name):
         layer = animation.add_layer(objects.ShapeLayer())
@@ -75,13 +113,13 @@ class Vectorizer:
             layer._max_verts[group.name] = 0
             fcol = glaxnimate_helpers.color_from_glaxnimate(color)
             group.add_shape(objects.Fill(NVector(*fcol)))
-            if self.stroke_width > 0:
-                group.add_shape(objects.Stroke(NVector(*fcol), self.stroke_width))
+            if self.trace_options.stroke_width > 0:
+                group.add_shape(objects.Stroke(NVector(*fcol), self.trace_options.stroke_width))
         return layer
 
-    def raster_to_layer(self, animation, raster, layer_name=None, mode=QuanzationMode.Nearest):
+    def raster_to_layer(self, animation, raster, layer_name=None):
         layer = self.prepare_layer(animation, layer_name)
-        mono_data = raster.trace(self.palette, mode)
+        mono_data = self.trace_options.trace(raster, self.palette)
         for (color, beziers), group in zip(mono_data, layer.shapes):
             self.traced_to_shapes(group, beziers)
         return layer
@@ -106,26 +144,30 @@ class Vectorizer:
         return bezier
 
 
-def raster_to_animation(filenames, n_colors=1, frame_delay=1,
-                        looping=True, framerate=60, palette=[],
-                        mode=QuanzationMode.Nearest,
-                        stroke=1):
+def raster_to_animation(
+    filenames,
+    n_colors=1,
+    frame_delay=1,
+    framerate=60,
+    palette=[],
+    trace_options=TraceOptions()
+):
+    vc = Vectorizer(trace_options)
 
-    vc = Vectorizer(stroke)
-
-    def callback(animation, raster, frame):
-        raster = RasterImage(raster)
+    def callback(animation, raster, frame, time, duration):
         if vc.palette is None:
             if palette:
                 vc.palette = [glaxnimate_helpers.color_to_glaxnimate(c) for c in palette]
             elif n_colors > 1:
-                vc.palette = raster.quantize(n_colors)
+                vc.palette = trace_options.quantize(raster, n_colors)
             else:
                 vc.palette = [glaxnimate.utils.Color(0, 0, 0, 255)]
-        layer = vc.raster_to_layer(animation, raster, "frame_%s" % frame, mode)
-        layer.in_point = frame * frame_delay
-        layer.out_point = (frame + 1) * frame_delay
+        layer = vc.raster_to_layer(animation, raster, "frame_%s" % frame)
+        layer.in_point = time
+        layer.out_point = layer.in_point + duration
 
     animation = _vectorizing_func(filenames, frame_delay, framerate, callback)
 
     return animation
+
+

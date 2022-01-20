@@ -8,6 +8,7 @@
  * Added more lottie objects to the model
  * Customizable export width/height
  * Improved pixel art conversion
+ * More options for tracing bitmaps
 
 ## 0.6.10 - 2021-09-18
  * Glaxnimate compatibility

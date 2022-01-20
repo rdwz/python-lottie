@@ -7,7 +7,7 @@ from ..parsers.pixel import (
 from ..parsers.svg.importer import parse_color
 
 try:
-    from ..parsers.raster import raster_to_animation
+    from ..parsers.raster import raster_to_animation, TraceOptions
     raster = True
 except ImportError:
     raster = False
@@ -64,12 +64,14 @@ def import_raster(filenames, n_colors, palette, mode, frame_delay=1,
         return raster_to_linked_assets(filenames, frame_delay, framerate)
     elif mode == "trace":
         from ..parsers.raster import QuanzationMode
-        cm = QuanzationMode.Nearest if color_mode == "nearest" else QuanzationMode.Exact
+        options = TraceOptions()
+        options.color_mode = QuanzationMode.Nearest if color_mode == "nearest" else QuanzationMode.Exact
+        options.stroke_width = stroke
         return raster_to_animation(
             filenames, n_colors, frame_delay,
             framerate=framerate,
             palette=palette,
-            mode=cm
+            trace_options=options
         )
     elif mode == "polygon":
         return pixel_to_animation_paths(filenames, frame_delay, framerate)
