@@ -187,7 +187,7 @@ class LottieProp:
             return v.to_dict()
         elif isinstance(v, NVector):
             return list(map(self._basic_to_dict, v.components))
-        elif isinstance(v, list):
+        elif isinstance(v, (list, tuple)):
             return list(map(self._basic_to_dict, v))
         elif isinstance(v, (int, str, bool)):
             return v
@@ -196,19 +196,19 @@ class LottieProp:
                 return int(v)
             return v # round(v, 3)
         else:
-            raise Exception("Unknown value %r" % v)
+            raise Exception("Unknown value {!r}".format(v))
 
     def __repr__(self):
         return "<LottieProp %s:%s>" % (self.name, self.lottie)
 
     def clone_value(self, value):
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [self.clone_value(v) for v in value]
         if isinstance(value, (LottieBase, NVector)):
             return value.clone()
         if isinstance(value, (int, float, bool, str)) or value is None:
             return value
-        raise Exception("Could not convert %r" % value)
+        raise Exception("Could not convert {!r}".format(value))
 
 
 class LottieObjectMeta(type):

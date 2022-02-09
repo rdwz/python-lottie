@@ -7,7 +7,7 @@ from ..nvector import NVector
 from .pixel import _vectorizing_func
 
 
-class QuanzationMode(enum.Enum):
+class QuantizationMode(enum.Enum):
     Nearest = 1
     Exact = 2
 
@@ -36,13 +36,31 @@ class KModesPalette(PaletteAlgorithm):
         return glaxnimate.utils.quantize.k_modes(image, n_colors)
 
 
+class EdgeExclusionModesPalette(PaletteAlgorithm):
+    def __init__(self, min_frequency=0.0005):
+        self.min_frequency = min_frequency
+
+    def get_colors(self, image, n_colors):
+        return glaxnimate.utils.quantize.edge_exclusion_modes(image, n_colors, self.min_frequency)
+
+
 class TraceOptions:
-    def __init__(self, color_mode=QuanzationMode.Nearest, palette_algorithm=OctreePalette(), tolerance=100, stroke_width=1):
+    def __init__(
+        self,
+        color_mode=QuantizationMode.Nearest,
+        palette_algorithm=OctreePalette(),
+        tolerance=100,
+        stroke_width=1,
+        smoothness=0.75,
+        min_area=16
+    ):
         self.trace_options = glaxnimate.utils.trace.TraceOptions()
         self.palette_algorithm = palette_algorithm
         self.color_mode = color_mode
         self.tolerance = tolerance
         self.stroke_width = stroke_width
+        self.min_area = min_area
+        self.smoothness = smoothness
 
     @property
     def smoothness(self):
@@ -79,7 +97,7 @@ class TraceOptions:
             tracer.set_target_alpha(128, False)
             return [glaxnimate.utils.Color(0, 0, 0), tracer.trace()]
 
-        if self.color_mode == QuanzationMode.Nearest:
+        if self.color_mode == QuantizationMode.Nearest:
             return list(zip(codebook, glaxnimate.utils.trace.quantize_and_trace(image, self.trace_options, codebook)))
 
         mono_data = []
