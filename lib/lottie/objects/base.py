@@ -4,6 +4,7 @@ import importlib
 from ..nvector import NVector
 from ..utils.color import Color, ColorMode
 
+
 class LottieBase:
     """!
     Base class for Lottie JSON objects bindings
