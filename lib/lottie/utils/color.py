@@ -445,3 +445,13 @@ class Color(NVector):
                 self.components[i] = value
                 return
         return super().__setattr__(name, value)
+
+
+def color_to_hex(color: Color):
+    conv = color.to_rgb()
+    return "#%02x%02x%02x" % tuple((conv * 255).components[:3])
+
+
+def color_from_hex(hex: str):
+    from ..parsers.svg.color import parse_color
+    return parse_color(hex)

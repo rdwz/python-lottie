@@ -212,7 +212,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
             rect = ElementTree.SubElement(g, "rect")
             rect.attrib["width"] = str(lot.width)
             rect.attrib["height"] = str(lot.height)
-            rect.attrib["fill"] = lot.color
+            rect.attrib["fill"] = color_to_css(lot.color)
 
         if not lot.name:
             g.attrib[self.qualified("inkscape", "label")] = lot.__class__.__name__

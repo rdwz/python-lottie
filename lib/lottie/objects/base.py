@@ -2,8 +2,7 @@ import enum
 import inspect
 import importlib
 from ..nvector import NVector
-from ..utils.color import Color
-
+from ..utils.color import Color, ColorMode
 
 class LottieBase:
     """!
@@ -141,10 +140,6 @@ class LottieProp:
         """
         if self.list is PseudoList and isinstance(lottieval, list):
             return self._load_scalar(lottieval[0])
-            #return [
-                #self._load_scalar(it)
-                #for it in lottieval
-            #]
         elif self.list is True:
             return list(filter(lambda x: x is not None, (
                 self._load_scalar(it)
@@ -174,17 +169,22 @@ class LottieProp:
         Converts the value of the property as from @p obj into a JSON value
         @param obj LottieObject with this property
         """
-        val = self._basic_to_dict(self.get(obj))
+        val = self.get(obj)
+        if isinstance(self.type, LottieValueConverter):
+            val = self.type.py_to_lottie(val)
+
+        val = self._basic_to_dict(val)
+
         if self.list is PseudoList:
             if not isinstance(obj, list):
                 return [val]
-        elif isinstance(self.type, LottieValueConverter):
-            val = self._basic_to_dict(self.type.py_to_lottie(val))
         return val
 
     def _basic_to_dict(self, v):
         if isinstance(v, LottieBase):
             return v.to_dict()
+        elif isinstance(v, Color):
+            return list(map(self._basic_to_dict, v.to_rgb().components))
         elif isinstance(v, NVector):
             return list(map(self._basic_to_dict, v.components))
         elif isinstance(v, (list, tuple)):

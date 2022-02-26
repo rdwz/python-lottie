@@ -1,10 +1,11 @@
 import warnings
-from .base import LottieObject, LottieProp, PseudoBool, LottieEnum
+from .base import LottieObject, LottieProp, PseudoBool, LottieEnum, LottieValueConverter
 from .effects import Effect
 from .helpers import Transform, Mask, VisualObject, BlendMode
 from .shapes import ShapeElement
 from .text import TextAnimatorData
 from .properties import Value
+from ..utils.color import Color, color_from_hex, color_to_hex
 
 
 ## @ingroup Lottie
@@ -251,23 +252,25 @@ class PreCompLayer(Layer):
         self.height = 512
 
 
+ColorString = LottieValueConverter(color_from_hex, color_to_hex, "Color string")
+
+
 ## @ingroup Lottie
 class SolidColorLayer(Layer):
     """!
     Layer with a solid color rectangle
     """
     _props = [
-        LottieProp("color", "sc", str, False),
+        LottieProp("color", "sc", ColorString, False),
         LottieProp("height", "sh", float, False),
         LottieProp("width", "sw", float, False),
     ]
     ## %Layer type.
     type = 1
 
-    def __init__(self, color="", width=512, height=512):
+    def __init__(self, color=Color(), width=512, height=512):
         Layer.__init__(self)
         ## Color of the layer as a @c \#rrggbb hex
-        # @todo Convert NVector to string
         self.color = color
         ## Height of the layer.
         self.height = height

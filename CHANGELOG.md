@@ -1,3 +1,6 @@
+## Unreleased
+ * Improved color management
+
 ## 0.6.11 - 2022-01-20
  * Fancy text formatting renderer
  * Added PuckerBloat support
