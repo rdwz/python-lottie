@@ -46,12 +46,12 @@ circle_layer.transform.position.add_keyframe(last_frame/2, Point(256, 50))
 circle_layer.transform.position.add_keyframe(last_frame, Point(256, 512-50))
 
 
-scl = base.add_child(objects.SolidColorLayer("#0000ff"))
+scl = base.add_child(objects.SolidColorLayer(Color(0, 0, 1)))
 scl.transform.scale.value.x *= 0.2
 scl.transform.position.value.x = 205
 
 
-star_background = star_layer.add_child(objects.SolidColorLayer("#0000ff", 100, 100))
+star_background = star_layer.add_child(objects.SolidColorLayer(Color(0, 0, 1), 100, 100))
 
 
 script.script_main(an)
