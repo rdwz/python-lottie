@@ -10,7 +10,7 @@ from lottie import NVector
 import bpy
 import bpy_extras
 import mathutils
-
+depsgraph = bpy.context.evaluated_depsgraph_get()
 
 @dataclass
 class RenderOptions:
@@ -191,6 +191,7 @@ def collection_to_group(collection, parent, ro: RenderOptions):
 def curve_to_shape(obj, parent, ro: RenderOptions):
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
+    # obj = obj.evaluated_get(depsgraph) #does not seem to work for curves
     beziers = []
 
     animated = AnimationWrapper(obj)
@@ -209,6 +210,7 @@ def curve_to_shape(obj, parent, ro: RenderOptions):
     times = list(sorted(times))
     for time in times:
         ro.scene.frame_set(time)
+        # obj = obj.evaluated_get(depsgraph) #does not seem to work for curves
         if not shapekeys:
             for spline, sh in zip(obj.data.splines, g.shapes):
                 sh.shape.add_keyframe(time, curve_get_bezier(spline, obj, ro))
@@ -278,6 +280,7 @@ def mesh_to_shape(obj, parent, ro):
     # TODO concave hull to optimize
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
+    obj = obj.evaluated_get(depsgraph)
     verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
     fill = get_fill(obj, ro)
     animated = AnimationWrapper(obj)
@@ -299,6 +302,8 @@ def mesh_to_shape(obj, parent, ro):
     if times:
         for time in times:
             ro.scene.frame_set(time)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            obj = obj.evaluated_get(depsgraph)
             verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
 
             for f, shp in zip(obj.data.polygons, g.shapes):
@@ -386,7 +391,8 @@ def object_to_shape(obj, parent, ro: RenderOptions):
 
     g = None
     ro.scene.frame_set(0)
-
+    
+    obj = obj.evaluated_get(depsgraph)
     if obj.type == "CURVE":
         g = curve_to_shape(obj, parent, ro)
     elif obj.type == "MESH":
