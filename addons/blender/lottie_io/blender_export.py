@@ -146,6 +146,7 @@ def context_to_tgs(context):
     scene = context.scene
     root = context.view_layer.layer_collection
     initial_frame = scene.frame_current
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     try:
         animation = lottie.objects.Animation()
         animation.in_point = scene.frame_start
@@ -161,9 +162,10 @@ def context_to_tgs(context):
             ro.line_width = scene.render.line_thickness
         else:
             ro.line_width = 0
-        ro.camera_angles = NVector(*scene.camera.rotation_euler) * 180 / math.pi
+        ro.camera_angles = NVector(
+            *scene.camera.rotation_euler) * 180 / math.pi
 
-        collection_to_group(root, layer, ro)
+        collection_to_group(root, layer, ro, depsgraph)
         adjust_animation(scene, animation, ro)
 
         return animation
