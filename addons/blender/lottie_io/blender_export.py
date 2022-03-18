@@ -10,7 +10,7 @@ from lottie import NVector
 import bpy
 import bpy_extras
 import mathutils
-depsgraph = bpy.context.evaluated_depsgraph_get()
+
 
 @dataclass
 class RenderOptions:
@@ -188,10 +188,9 @@ def collection_to_group(collection, parent, ro: RenderOptions):
         object_to_shape(obj, parent, ro)
 
 
-def curve_to_shape(obj, parent, ro: RenderOptions):
+def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
-    # obj = obj.evaluated_get(depsgraph) #does not seem to work for curves
     beziers = []
 
     animated = AnimationWrapper(obj)
@@ -209,13 +208,15 @@ def curve_to_shape(obj, parent, ro: RenderOptions):
 
     times = list(sorted(times))
     for time in times:
+
         ro.scene.frame_set(time)
-        # obj = obj.evaluated_get(depsgraph) #does not seem to work for curves
+        obj = obj.evaluated_get(depsgraph)
         if not shapekeys:
             for spline, sh in zip(obj.data.splines, g.shapes):
                 sh.shape.add_keyframe(time, curve_get_bezier(spline, obj, ro))
         else:
             obj.shape_key_add(from_mix=True)
+            obj = obj.evaluated_get(depsgraph)
             shape_key = obj.data.shape_keys.key_blocks[-1]
             start = 0
             for spline, sh, bezier in zip(obj.data.splines, g.shapes, beziers):
@@ -232,9 +233,15 @@ def curve_to_shape(obj, parent, ro: RenderOptions):
     return g
 
 
+
 def get_fill(obj, ro):
+    print(obj.name)
     # TODO animation
-    fillc = obj.active_material.diffuse_color
+    try:
+        fillc = obj.active_material.diffuse_color
+    except AttributeError:
+        print("no diffuse color for:")
+        print(obj.name)
     fill = lottie.objects.Fill(NVector(*fillc[:-1]))
     fill.name = obj.active_material.name
     fill.opacity.value = fillc[-1] * 100
@@ -276,11 +283,10 @@ def add_point_to_poly(bez, point, ro, obj):
     bez.add_point(ro.vpix_r(obj, point.co))
 
 
-def mesh_to_shape(obj, parent, ro):
+def mesh_to_shape(obj, parent, ro, depsgraph):
     # TODO concave hull to optimize
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
-    obj = obj.evaluated_get(depsgraph)
     verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
     fill = get_fill(obj, ro)
     animated = AnimationWrapper(obj)
@@ -302,7 +308,6 @@ def mesh_to_shape(obj, parent, ro):
     if times:
         for time in times:
             ro.scene.frame_set(time)
-            depsgraph = bpy.context.evaluated_depsgraph_get()
             obj = obj.evaluated_get(depsgraph)
             verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
 
@@ -385,18 +390,17 @@ def gpencil_to_shape(obj, parent, ro):
     return gpen
 
 
-def object_to_shape(obj, parent, ro: RenderOptions):
+def object_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     if obj.hide_render:
         return
 
     g = None
     ro.scene.frame_set(0)
-    
     obj = obj.evaluated_get(depsgraph)
     if obj.type == "CURVE":
-        g = curve_to_shape(obj, parent, ro)
+        g = curve_to_shape(obj, parent, ro, depsgraph)
     elif obj.type == "MESH":
-        g = mesh_to_shape(obj, parent, ro)
+        g = mesh_to_shape(obj, parent, ro, depsgraph)
     elif obj.type == "GPENCIL":
         g = gpencil_to_shape(obj, parent, ro)
 
