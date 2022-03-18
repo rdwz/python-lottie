@@ -146,6 +146,7 @@ def context_to_tgs(context):
     scene = context.scene
     root = context.view_layer.layer_collection
     initial_frame = scene.frame_current
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     try:
         animation = lottie.objects.Animation()
         animation.in_point = scene.frame_start
@@ -161,9 +162,10 @@ def context_to_tgs(context):
             ro.line_width = scene.render.line_thickness
         else:
             ro.line_width = 0
-        ro.camera_angles = NVector(*scene.camera.rotation_euler) * 180 / math.pi
+        ro.camera_angles = NVector(
+            *scene.camera.rotation_euler) * 180 / math.pi
 
-        collection_to_group(root, layer, ro)
+        collection_to_group(root, layer, ro, depsgraph)
         adjust_animation(scene, animation, ro)
 
         return animation
@@ -188,7 +190,7 @@ def collection_to_group(collection, parent, ro: RenderOptions):
         object_to_shape(obj, parent, ro)
 
 
-def curve_to_shape(obj, parent, ro: RenderOptions):
+def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
     beziers = []
@@ -208,12 +210,15 @@ def curve_to_shape(obj, parent, ro: RenderOptions):
 
     times = list(sorted(times))
     for time in times:
+
         ro.scene.frame_set(time)
+        obj = obj.evaluated_get(depsgraph)
         if not shapekeys:
             for spline, sh in zip(obj.data.splines, g.shapes):
                 sh.shape.add_keyframe(time, curve_get_bezier(spline, obj, ro))
         else:
             obj.shape_key_add(from_mix=True)
+            obj = obj.evaluated_get(depsgraph)
             shape_key = obj.data.shape_keys.key_blocks[-1]
             start = 0
             for spline, sh, bezier in zip(obj.data.splines, g.shapes, beziers):
@@ -230,9 +235,15 @@ def curve_to_shape(obj, parent, ro: RenderOptions):
     return g
 
 
+
 def get_fill(obj, ro):
+    print(obj.name)
     # TODO animation
-    fillc = obj.active_material.diffuse_color
+    try:
+        fillc = obj.active_material.diffuse_color
+    except AttributeError:
+        print("no diffuse color for:")
+        print(obj.name)
     fill = lottie.objects.Fill(NVector(*fillc[:-1]))
     fill.name = obj.active_material.name
     fill.opacity.value = fillc[-1] * 100
@@ -274,7 +285,7 @@ def add_point_to_poly(bez, point, ro, obj):
     bez.add_point(ro.vpix_r(obj, point.co))
 
 
-def mesh_to_shape(obj, parent, ro):
+def mesh_to_shape(obj, parent, ro, depsgraph):
     # TODO concave hull to optimize
     g = parent.add_shape(lottie.objects.Group())
     g.name = obj.name
@@ -299,6 +310,7 @@ def mesh_to_shape(obj, parent, ro):
     if times:
         for time in times:
             ro.scene.frame_set(time)
+            obj = obj.evaluated_get(depsgraph)
             verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
 
             for f, shp in zip(obj.data.polygons, g.shapes):
@@ -380,17 +392,17 @@ def gpencil_to_shape(obj, parent, ro):
     return gpen
 
 
-def object_to_shape(obj, parent, ro: RenderOptions):
+def object_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     if obj.hide_render:
         return
 
     g = None
     ro.scene.frame_set(0)
-
+    obj = obj.evaluated_get(depsgraph)
     if obj.type == "CURVE":
-        g = curve_to_shape(obj, parent, ro)
+        g = curve_to_shape(obj, parent, ro, depsgraph)
     elif obj.type == "MESH":
-        g = mesh_to_shape(obj, parent, ro)
+        g = mesh_to_shape(obj, parent, ro, depsgraph)
     elif obj.type == "GPENCIL":
         g = gpencil_to_shape(obj, parent, ro)
 
