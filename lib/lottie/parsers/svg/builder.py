@@ -8,6 +8,7 @@ from ...nvector import NVector
 from ...utils import restructure
 from ...utils.transform import TransformMatrix
 from ...parsers import glaxnimate_helpers
+from ...utils.color import Color, ColorMode
 try:
     from ...utils import font
     has_font = True
@@ -735,6 +736,8 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
 def color_to_css(color):
     #if len(color) == 4:
         #return ("rgba(%s, %s, %s" % tuple(map(lambda c: int(round(c*255)), color[:3]))) + ", %s)" % color[3]
+    if isinstance(color, Color) and color.mode != ColorMode.RGB:
+        color = color.converted(ColorMode.RGB)
     return "rgb(%s, %s, %s)" % tuple(map(lambda c: int(round(c*255)), color[:3]))
 
 
