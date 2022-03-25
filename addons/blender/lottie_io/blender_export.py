@@ -11,6 +11,13 @@ from dataclasses import dataclass
 sys.path.insert(0, os.path.dirname(__file__))
 
 
+class LottieMaterialException(Exception):
+    def __init__(self, objname, problem):
+        self.message = f'\n Object causing export problem: {objname}.\nProblem:\n{problem}\n Please Check Material Slots/Geometry Nodes of this object.'
+
+        super().__init__(self.message)
+
+
 @dataclass
 class RenderOptions:
     scene: bpy.types.Scene
@@ -99,6 +106,13 @@ class AnimationKeyframe:
             fc.array_index: kf.co.y
         }
 
+        if kf.interpolation == 'LINEAR':
+            self._easing = lottie.objects.easing.Linear()
+        elif kf.interpolation == 'CONSTANT':
+            self._easing = lottie.objects.easing.Jump()
+        elif kf.interpolation == 'BEZIER':
+            self._easing = lottie.objects.easing.Sigmoid()
+
     def __setitem__(self, key, value):
         self.value[key] = value
 
@@ -110,7 +124,7 @@ class AnimationKeyframe:
 
     # TODO pull easing
     def easing(self):
-        return lottie.objects.easing.Linear()
+        return self._easing
 
 
 class AnimationWrapper:
@@ -135,6 +149,11 @@ class AnimationWrapper:
         return AnimatedProperty(self, name)
 
     def keyframe_times(self):
+        kft = set()
+        for kfl in self.animation.values():
+            kft |= set(kf.time for kf in kfl)
+        return kft
+
         kft = set()
         for kfl in self.animation.values():
             kft |= set(kf.time for kf in kfl)
@@ -195,37 +214,47 @@ def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     beziers = []
 
     animated = AnimationWrapper(obj)
-    for spline in obj.data.splines:
-        sh = lottie.objects.Path()
-        g.add_shape(sh)
+    cdata = obj.to_curve(depsgraph)
+    for spline in cdata.splines:
+        shp = g.add_shape(lottie.objects.Group())
+        sh = shp.add_shape(lottie.objects.Path())
+        shp.add_shape(get_fill_geometry(obj, spline))
         sh.shape.value = curve_get_bezier(spline, obj, ro)
         beziers.append(sh.shape.value)
 
     times = animated.keyframe_times()
     shapekeys = None
-    if obj.data.shape_keys:
-        shapekeys = AnimationWrapper(obj.data.shape_keys)
+    if cdata.shape_keys:
+        shapekeys = AnimationWrapper(cdata.shape_keys)
         times |= shapekeys.keyframe_times()
 
     times = list(sorted(times))
-    for time in times:
 
+    for time in times:
+        obj.to_curve_clear()
         ro.scene.frame_set(int(time))
         obj = obj.evaluated_get(depsgraph)
+        cdata = obj.to_curve(depsgraph)
         if not shapekeys:
-            for spline, sh in zip(obj.data.splines, g.shapes):
+            cdata = obj.to_curve(depsgraph)
+            for spline, grsh in zip(cdata.splines, g.shapes):
+                sh = grsh.shapes[0]
                 sh.shape.add_keyframe(time, curve_get_bezier(spline, obj, ro))
         else:
             obj.shape_key_add(from_mix=True)
-            obj = obj.evaluated_get(depsgraph)
+            # obj = obj.evaluated_get(depsgraph)
             shape_key = obj.data.shape_keys.key_blocks[-1]
             start = 0
-            for spline, sh, bezier in zip(obj.data.splines, g.shapes, beziers):
+            for spline, grsh, bezier in zip(obj.data.splines, g.shapes, beziers):
+                sh = grsh.shapes[0]
+
                 end = start + len(bezier.vertices)
                 bez = lottie.objects.Bezier()
                 bez.closed = bezier.closed
                 for i in range(start, end):
+
                     add_point_to_bezier(bez, shape_key.data[i], ro, obj)
+
                 sh.shape.add_keyframe(time, bez)
                 start = end
             obj.shape_key_remove(shape_key)
@@ -234,18 +263,89 @@ def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     return g
 
 
-def get_fill(obj, ro):
-    print(obj.name)
-    # TODO animation
+def mesh_to_shape(obj, parent, ro, depsgraph):
+    # TODO concave hull to optimize
+    g = parent.add_shape(lottie.objects.Group())
+    g.name = obj.name
+    verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
+
+    animated = AnimationWrapper(obj)
+    times = animated.keyframe_times()
+    if len(obj.modifiers):
+        for modifier in obj.modifiers:
+            if modifier.type == 'NODES' and modifier.node_group:
+                geonodes_anims = AnimationWrapper(modifier.node_group)
+                times |= geonodes_anims.keyframe_times()
+
+    times = list(sorted(times))
+
+    def f_bez(f):
+        bez = lottie.objects.Bezier()
+        bez.close()
+        for v in f.vertices:
+            bez.add_point(verts[v])
+        return bez
+
+    for f in obj.data.polygons:
+        shp = g.add_shape(lottie.objects.Group())
+        sh = shp.add_shape(lottie.objects.Path())
+        shp.add_shape(get_fill_geometry(obj, f))
+        sh.shape.value = f_bez(f)
+
+    if times:
+        for time in times:
+            ro.scene.frame_set(int(time))
+            obj = obj.evaluated_get(depsgraph)
+            verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
+
+            for f, shp in zip(obj.data.polygons, g.shapes):
+                try:
+                    sh = shp.shapes[0]
+                except AttributeError as e:
+                    raise Exception(
+                        f'object: {obj.name} has modifier that changes number of polygons over the duration of animation') from e
+
+                sh.shape.add_keyframe(time, f_bez(f))
+    mesh_apply_material(obj, g, ro)
+    return g
+
+
+def get_fill_geometry(obj, geom):
     try:
-        fillc = obj.active_material.diffuse_color
-    except AttributeError:
-        print("no diffuse color for:")
-        print(obj.name)
+        material = obj.material_slots[geom.material_index].material
+    except IndexError as e:
+        raise LottieMaterialException(
+            obj.name, 'no material for part of geometry') from e
+
+    return mat_to_fill(obj, material)
+
+
+def mat_to_fill(obj, material):
+    try:
+        if material is None:
+            material = obj.original.active_material
+
+        fillc = material.diffuse_color
+    except AttributeError as e:
+        raise LottieMaterialException(obj.name, 'no diffuse color') from e
+
     fill = lottie.objects.Fill(NVector(*fillc[:-1]))
-    fill.name = obj.active_material.name
+    fill.name = material.name
     fill.opacity.value = fillc[-1] * 100
     return fill
+
+
+def get_fill(obj, ro):
+    # get_fill per object now used only for curve_apply_material
+
+    print(obj.name)
+    material = obj.active_material
+    # TODO animation
+
+    # TODO get material from original object
+    # try remains to catch objects that have no material set and relay info to user
+
+    return mat_to_fill(obj, material)
 
 
 def curve_apply_material(obj, g, ro):
@@ -256,7 +356,21 @@ def curve_apply_material(obj, g, ro):
         # TODO animation
         strokec = obj.active_material.line_color
         stroke = lottie.objects.Stroke(NVector(*strokec[:-1]), ro.line_width)
-        stroke.opacity.value = fillc[-1] * 100
+        stroke.opacity.value = strokec[-1] * 100
+        g.add_shape(stroke)
+
+
+def mesh_apply_material(obj, g, ro):
+
+    if ro.line_width > 0:
+        # TODO
+        try:
+            strokec = obj.active_material.line_color
+        except AttributeError as e:
+            raise LottieMaterialException(
+                obj.name, 'freestyle stroke needs object material for line_color') from e
+        stroke = lottie.objects.Stroke(NVector(*strokec[:-1]), ro.line_width)
+        stroke.opacity.value = strokec[-1] * 100
         g.add_shape(stroke)
 
 
@@ -281,41 +395,6 @@ def add_point_to_bezier(bez, point, ro: RenderOptions, obj):
 
 def add_point_to_poly(bez, point, ro, obj):
     bez.add_point(ro.vpix_r(obj, point.co))
-
-
-def mesh_to_shape(obj, parent, ro, depsgraph):
-    # TODO concave hull to optimize
-    g = parent.add_shape(lottie.objects.Group())
-    g.name = obj.name
-    verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
-    fill = get_fill(obj, ro)
-    animated = AnimationWrapper(obj)
-    times = list(sorted(animated.keyframe_times()))
-
-    def f_bez(f):
-        bez = lottie.objects.Bezier()
-        bez.close()
-        for v in f.vertices:
-            bez.add_point(verts[v])
-        return bez
-
-    for f in obj.data.polygons:
-        shp = g.add_shape(lottie.objects.Group())
-        sh = shp.add_shape(lottie.objects.Path())
-        shp.add_shape(fill)
-        sh.shape.value = f_bez(f)
-
-    if times:
-        for time in times:
-            ro.scene.frame_set(int(time))
-            obj = obj.evaluated_get(depsgraph)
-            verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
-
-            for f, shp in zip(obj.data.polygons, g.shapes):
-                sh = shp.shapes[0]
-                sh.shape.add_keyframe(time, f_bez(f))
-
-    return g
 
 
 def gpencil_to_shape(obj, parent, ro):
