@@ -1,15 +1,14 @@
+import mathutils
+import bpy_extras
+import bpy
+from lottie import NVector
+import lottie
 import os
 import sys
 import math
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(__file__))
-import lottie
-from lottie import NVector
-
-import bpy
-import bpy_extras
-import mathutils
 
 
 @dataclass
@@ -170,7 +169,7 @@ def context_to_tgs(context):
 
         return animation
     finally:
-        scene.frame_set(initial_frame)
+        scene.frame_set(int(initial_frame))
 
 
 def adjust_animation(scene, animation, ro):
@@ -179,15 +178,15 @@ def adjust_animation(scene, animation, ro):
     layer.shapes = list(sorted(layer.shapes, key=lambda x: x._z))
 
 
-def collection_to_group(collection, parent, ro: RenderOptions):
+def collection_to_group(collection, parent, ro: RenderOptions, depsgraph):
     if collection.exclude or collection.collection.hide_render:
         return
 
     for obj in collection.children:
-        collection_to_group(obj, parent, ro)
+        collection_to_group(obj, parent, ro, depsgraph)
 
     for obj in collection.collection.objects:
-        object_to_shape(obj, parent, ro)
+        object_to_shape(obj, parent, ro, depsgraph)
 
 
 def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
@@ -211,7 +210,7 @@ def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
     times = list(sorted(times))
     for time in times:
 
-        ro.scene.frame_set(time)
+        ro.scene.frame_set(int(time))
         obj = obj.evaluated_get(depsgraph)
         if not shapekeys:
             for spline, sh in zip(obj.data.splines, g.shapes):
@@ -233,7 +232,6 @@ def curve_to_shape(obj, parent, ro: RenderOptions, depsgraph):
 
     curve_apply_material(obj, g, ro)
     return g
-
 
 
 def get_fill(obj, ro):
@@ -309,7 +307,7 @@ def mesh_to_shape(obj, parent, ro, depsgraph):
 
     if times:
         for time in times:
-            ro.scene.frame_set(time)
+            ro.scene.frame_set(int(time))
             obj = obj.evaluated_get(depsgraph)
             verts = list(ro.vpix_r(obj, v.co) for v in obj.data.vertices)
 
@@ -340,13 +338,15 @@ def gpencil_to_shape(obj, parent, ro):
         for frame in layer.frames:
             if gframe:
                 if not gframe.transform.opacity.animated:
-                    gframe.transform.opacity.add_keyframe(0, 100, lottie.objects.easing.Jump())
+                    gframe.transform.opacity.add_keyframe(
+                        0, 100, lottie.objects.easing.Jump())
                 gframe.transform.opacity.add_keyframe(frame.frame_number, 0)
 
             gframe = glay.add_shape(lottie.objects.Group())
             gframe.name = "frame %s" % frame.frame_number
             if frame.frame_number != 0:
-                gframe.transform.opacity.add_keyframe(0, 0, lottie.objects.easing.Jump())
+                gframe.transform.opacity.add_keyframe(
+                    0, 0, lottie.objects.easing.Jump())
                 gframe.transform.opacity.add_keyframe(frame.frame_number, 100)
 
             # GPencilStroke
