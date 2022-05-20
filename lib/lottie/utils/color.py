@@ -449,7 +449,7 @@ class Color(NVector):
 
 def color_to_hex(color: Color):
     conv = color.to_rgb()
-    return "#%02x%02x%02x" % tuple((conv * 255).components[:3])
+    return "#%02x%02x%02x" % tuple(map(int, (conv * 255).components[:3]))
 
 
 def color_from_hex(hex: str):
