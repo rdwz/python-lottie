@@ -145,7 +145,7 @@ class Keyframe(LottieObject):
 
     @jump.setter
     def jump(self, v):
-        self.hold  = v
+        self.hold = v
 
     def bezier(self):
         if self.hold:
