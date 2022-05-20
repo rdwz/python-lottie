@@ -55,4 +55,3 @@ star_background = star_layer.add_child(objects.SolidColorLayer(Color(0, 0, 1), 1
 
 
 script.script_main(an)
-

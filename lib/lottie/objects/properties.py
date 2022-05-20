@@ -119,7 +119,7 @@ class Keyframe(LottieObject):
         LottieProp("time", "t", float, False),
         LottieProp("in_value", "i", easing.KeyframeBezierHandle, False),
         LottieProp("out_value", "o", easing.KeyframeBezierHandle, False),
-        LottieProp("jump", "h", PseudoBool),
+        LottieProp("hold", "h", PseudoBool),
     ]
 
     def __init__(self, time=0, easing_function=None):
@@ -134,13 +134,21 @@ class Keyframe(LottieObject):
         ## Bezier curve easing out value.
         self.out_value = None
         ## Jump to the end value
-        self.jump = None
+        self.hold = None
 
         if easing_function:
             easing_function(self)
 
+    @property
+    def jump(self):
+        return self.hold
+
+    @jump.setter
+    def jump(self, v):
+        self.hold  = v
+
     def bezier(self):
-        if self.jump:
+        if self.hold:
             bez = Bezier()
             bez.add_point(NVector(0, 0))
             bez.add_point(NVector(1, 0))

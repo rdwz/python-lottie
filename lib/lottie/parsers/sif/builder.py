@@ -146,7 +146,7 @@ class SifBuilder(restructure.AbstractBuilder):
 
                 if i > 0:
                     prev = kframes[i-1]
-                    if prev.jump:
+                    if prev.hold:
                         waypoint.before = api.Interpolation.Constant
                     elif prev.in_value and prev.in_value.x < 1:
                         waypoint.before = api.Interpolation.Ease
@@ -155,7 +155,7 @@ class SifBuilder(restructure.AbstractBuilder):
                 else:
                     waypoint.before = api.Interpolation.Linear
 
-                if keyframe.jump:
+                if keyframe.hold:
                     waypoint.after = api.Interpolation.Constant
                 elif keyframe.out_value and keyframe.out_value.x > 0:
                     waypoint.after = api.Interpolation.Ease
