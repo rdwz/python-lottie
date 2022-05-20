@@ -374,6 +374,84 @@ class AnimatableMixin:
             obj.animated = prop_animated(lottiedict)
         return obj
 
+    def average(self, start, end, value_map=lambda v: v):
+        if not self.animated or len(self.keyframes) == 0:
+            return value_map(self.value)
+        elif len(self.keyframes) == 1:
+            return value_map(self.keyframes[0].start)
+
+        total_weight = 0
+        value = value_map(self.keyframes[0].start) * 0
+        kf_index = 0
+
+        if self.keyframes[0].time > start:
+            weight = self.keyframes[0].time - start
+            value += value_map(self.keyframes[0].start) * weight
+            total_weight += weight
+        elif self.keyframes[0].time < start:
+            avg = (self.keyframes[1].time + self.keyframes[0].time) / 2
+            kf_index = 1
+            if self.keyframes[0].hold:
+                weight = self.keyframes[1].time - start
+                value += value_map(self.keyframes[0].start) * weight
+                total_weight += weight
+            elif start < avg:
+                weight = avg - start
+                value += value_map(self.keyframes[0].start) * weight
+                total_weight += weight
+
+                half = (self.keyframes[1].time - self.keyframes[0].time) / 2
+                value += value_map(self.keyframes[1].start) * half
+                total_weight += half
+            else:
+                weight = self.keyframes[1].time - start
+                value += value_map(self.keyframes[1].start) * weight
+                total_weight += weight
+
+        for i in range(kf_index, len(self.keyframes) - 1):
+            kf = self.keyframes[i]
+            kfn = self.keyframes[i + 1]
+            if kfn.time > end:
+                break
+
+            delta = kfn.time - kf.time
+            total_weight += delta
+            if kf.hold:
+                value += value_map(kf.start) * delta
+            else:
+                value += value_map(kf.start) * (delta / 2)
+                value += value_map(kfn.start) * (delta / 2)
+        else:
+            kf = self.keyframes[-1]
+            kfn = self.keyframes[-1]
+
+        if kfn.time < end:
+            weight = end - kfn.time
+            value += value_map(kfn.start) * weight
+            total_weight += weight
+        elif kf.hold:
+            weight = end - kf.time
+            value += value_map(kf.start) * weight
+            total_weight += weight
+        elif kfn.time > end:
+            avg = (kf.time + kfn.time) / 2
+            if end < avg:
+                weight = end - kf.time
+                value += value_map(kf.start) * weight
+                total_weight += weight
+            else:
+                half = (kfn.time - kf.time) / 2
+                value += value_map(kf.start) * half
+                total_weight += half
+
+                weight = end - avg
+                value += value_map(kfn.start) * weight
+                total_weight += weight
+
+        if total_weight == 0:
+            return value
+        return value / total_weight
+
 
 def prop_animated(l):
     if "a" in l:
