@@ -417,8 +417,10 @@ class Path(Shape):
         pos = self.shape.get_value(time)
 
         bb = BoundingBox()
-        for v in pos.vertices:
+        for v, i, o in zip(pos.vertices, pos.in_tangents, pos.out_tangents):
             bb.include(*v)
+            bb.include(*(v+i))
+            bb.include(*(v+o))
 
         return bb
 
