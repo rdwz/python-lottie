@@ -118,6 +118,7 @@ class ShapeElement(VisualObject):
 
 #ingroup Lottie
 class ShapeDirection(LottieEnum):
+    Undefined = 0
     ## Usually clockwise
     Normal = 1
     ## Usually counter clockwise
