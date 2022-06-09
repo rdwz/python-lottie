@@ -453,5 +453,5 @@ def color_to_hex(color: Color):
 
 
 def color_from_hex(hex: str):
-    from ..parsers.svg.color import parse_color
+    from ..parsers.svg.importer import parse_color
     return parse_color(hex)
