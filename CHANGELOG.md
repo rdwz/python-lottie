@@ -1,5 +1,6 @@
 ## Unreleased
  * Improved color management
+ * More accurate path shape bounding box
 
 ## 0.6.11 - 2022-01-20
  * Fancy text formatting renderer

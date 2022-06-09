@@ -118,6 +118,7 @@ class ShapeElement(VisualObject):
 
 #ingroup Lottie
 class ShapeDirection(LottieEnum):
+    Undefined = 0
     ## Usually clockwise
     Normal = 1
     ## Usually counter clockwise
@@ -417,8 +418,10 @@ class Path(Shape):
         pos = self.shape.get_value(time)
 
         bb = BoundingBox()
-        for v in pos.vertices:
+        for v, i, o in zip(pos.vertices, pos.in_tangents, pos.out_tangents):
             bb.include(*v)
+            bb.include(*(v+i))
+            bb.include(*(v+o))
 
         return bb
 
