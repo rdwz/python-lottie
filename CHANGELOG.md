@@ -1,6 +1,7 @@
 ## Unreleased
  * Improved color management
  * More accurate path shape bounding box
+ * More intuitive function to import lottie
 
 ## 0.6.11 - 2022-01-20
  * Fancy text formatting renderer
