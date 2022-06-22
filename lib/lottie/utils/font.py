@@ -664,8 +664,14 @@ class EmojiRenderer(FontRenderer):
     def font(self):
         return self.wrapped.font
 
+    def emoji_basename(self, char):
+        return "-".join("%x" % ord(cp) for cp in char)
+
+    def emoji_filename(self, char):
+        return self._get_svg_filename(char)[1]
+
     def _get_svg_filename(self, char):
-        basename = "-".join("%x" % ord(cp) for cp in char)
+        basename = self.emoji_basename(char)
         suffix = ".svg"
 
         filename = os.path.join(self.emoji_dir, basename + suffix)
