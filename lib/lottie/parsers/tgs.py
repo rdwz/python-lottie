@@ -16,7 +16,7 @@ def open_maybe_gzipped(file, on_open):
         with open(file, "r") as fileobj:
             return open_maybe_gzipped(fileobj, on_open)
 
-    if isinstance(file, io.TextIOBase):
+    if isinstance(file, io.TextIOBase) and hasattr(file, "buffer"):
         binfile = file.buffer
     else:
         binfile = file

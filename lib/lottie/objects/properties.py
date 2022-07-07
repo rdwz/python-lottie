@@ -682,7 +682,7 @@ class GradientColors(LottieObject):
         """
         self.colors.add_keyframe(time, self._flatten_stops(stops), ease)
 
-    def get_stops(self, keyframe=None):
+    def get_stops(self, keyframe=0):
         if keyframe is not None:
             colors = self.colors.keyframes[keyframe].start
         else:
