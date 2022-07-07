@@ -76,9 +76,23 @@ class TensorSerializer:
             base["color"] = base["fill"] or base["stroke"]
 
             for curve in item["curves"]:
+                points = []
+                for i in range(len(curve.vertices)):
+                    v = curve.vertices[i]
+                    points.append(list(v))
+                    points.append(list(curve.out_tangents[i] + v))
+                    next_i = (i+1) % len(curve.vertices)
+                    points.append(list(curve.in_tangents[next_i] + curve.vertices[next_i]))
+
+                if curve.closed:
+                    points.push(list(curve.vertices[0]))
+                else:
+                    points.pop()
+                    points.pop()
+
                 flattened.append({
                     **base,
-                    "points": list(map(list, curve.vertices)),
+                    "points": points,
                     "closed": int(curve.closed)
                 })
 
