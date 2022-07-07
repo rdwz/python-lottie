@@ -26,7 +26,8 @@ class TensorSerializer:
     def process_styler(self, styler):
         return {
             "opacity": (styler.opacity.get_value() or 100) / 100,
-            "color": styler.gradient.get_stops()[0][0]
+            "color":
+                styler.gradient.get_stops()[0][0]
                 if isinstance(styler, objects.Gradient)
                 else styler.color.get_value()
         }
