@@ -712,11 +712,12 @@ class SvgParser(SvgHandler):
             grad.colors = src.colors
 
         for stop in element.findall("./%s" % self.qualified("svg", "stop")):
-            off = float(stop.attrib["offset"].strip("%"))
-            if stop.attrib["offset"].endswith("%"):
+            offset = stop.attrib.get("offset", "0")
+            off = float(offset.strip("%"))
+            if offset.endswith("%"):
                 off /= 100
             style = self.parse_style(stop, {})
-            color = self.parse_color(style["stop-color"])
+            color = self.parse_color(style.get("stop-color", "black"))
             if "stop-opacity" in style:
                 color[3] = float(style["stop-opacity"])
             grad.add_color(off, color)
