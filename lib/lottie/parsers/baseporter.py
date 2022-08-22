@@ -75,7 +75,7 @@ class Loader:
             try:
                 importlib.import_module(full_modname, self._module_name)
             except ImportError as e:
-                self._failed[modname] = e.name
+                self._failed[modname] = "cairosvg or glaxnimate" if e.name == "lottie.exporters.cairo" else e.name
 
     @property
     def failed_modules(self):
