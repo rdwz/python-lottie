@@ -66,8 +66,8 @@ def export_dotlottie(animation, file, id=None, append=False, revision=None, auth
         animation = animation.clone()
         image_no = 0
         for asset in animation.assets:
-            if isinstance(asset, assets.Image):
-                ext, data = asset.image_data()
+            if isinstance(asset, assets.FileAsset):
+                ext, data = asset.data()
                 if not ext:
                     continue
                 pathname = "images/"
@@ -77,8 +77,8 @@ def export_dotlottie(animation, file, id=None, append=False, revision=None, auth
                     if pathname+basename not in files:
                         break
                 files[pathname+basename] = data
-                asset.image_path = pathname
-                asset.image = basename
+                asset.path = pathname
+                asset.file_name = basename
                 asset.is_embedded = False
 
     files["manifest.json"] = json.dumps(meta)

@@ -5,25 +5,30 @@ from .helpers import Transform
 from .shapes import ShapeElement
 
 
-## @ingroup Lottie
-## @ingroup LottieCheck
+#ingroup Lottie
 class MaskedPath(LottieObject):
+    """!
+    Uses the path described by a layer mask to put the text on said path.
+    """
     _props = [
-        LottieProp("mask", "m", float),
-        LottieProp("f", "f", Value),
-        LottieProp("l", "l", Value),
-        LottieProp("r", "r", float),
+        LottieProp("mask", "m", int, False),
+        LottieProp("first_margin", "f", Value, False),
+        LottieProp("last_margin", "l", Value, False),
+        LottieProp("reverse_path", "r", Value, False),
+        LottieProp("force_alignment", "a", Value, False),
+        LottieProp("perpendicular_to_path", "p", Value, False),
     ]
 
     def __init__(self):
-        ## Type?
+        super().__init__()
+
+        ## Index of the mask to use
         self.mask = None
-        ## First?
-        self.f = None
-        ## Last?
-        self.l = None
-        ## ??
-        self.r = None
+        self.first_margin = None
+        self.last_margin = None
+        self.reverse_path = None
+        self.force_alignment = None
+        self.perpendicular_to_path = None
 
 
 ## @ingroup Lottie
@@ -32,14 +37,25 @@ class TextAnimatorDataProperty(Transform):
     _props = [
         LottieProp("rotate_x", "rx", Value),
         LottieProp("rotate_y", "ry", Value),
+
         LottieProp("stroke_width", "sw", Value),
         LottieProp("stroke_color", "sc", ColorValue),
+        LottieProp("stroke_hue", "sh", Value, False),
+        LottieProp("stroke_saturation", "ss", Value, False),
+        LottieProp("stroke_brightness", "sb", Value, False),
+        LottieProp("stroke_opacity", "so", Value, False),
+
         LottieProp("fill_color", "fc", ColorValue),
         LottieProp("fill_hue", "fh", Value),
         LottieProp("fill_saturation", "fs", Value),
         LottieProp("fill_brightness", "fb", Value),
+        LottieProp("fill_opacity", "fo", Value, False),
+
         LottieProp("tracking", "t", Value),
         LottieProp("scale", "s", MultiDimensional),
+        LottieProp("blur", "bl", Value, False),
+        LottieProp("line_spacing", "ls", Value, False),
+
     ]
 
     def __init__(self):
@@ -48,20 +64,30 @@ class TextAnimatorDataProperty(Transform):
         self.rx = Value()
         ## Angle?
         self.ry = Value()
+
         ## Stroke width
         self.stroke_width = Value()
         ## Stroke color
-        self.stroke_color = MultiDimensional()
+        self.stroke_color = ColorValue()
+        self.stroke_hue = None
+        self.stroke_saturation = None
+        self.stroke_brightness = None
+        self.stroke_opacity = None
+
         ## Fill color
-        self.fill_color = MultiDimensional()
+        self.fill_color = ColorValue()
         ## Hue
         self.fill_hue = Value()
         ## Saturation 0-100
         self.fill_saturation = Value()
         ## Brightness 0-100
         self.fill_brightness = Value()
+        self.fill_opacity = None
+
         ## Tracking
         self.tracking = Value()
+        self.blur = None
+        self.line_spacing = None
 
 
 ## @ingroup Lottie
@@ -116,26 +142,43 @@ class TextDocument(LottieObject):
     """
     _props = [
         LottieProp("font_family", "f", str),
-        LottieProp("color", "fc", Color),
+        LottieProp("fill_color", "fc", Color),
+
+        LottieProp("stroke_color", "sc", Color, False),
+        LottieProp("stroke_width", "sw", float, False),
+        LottieProp("stroke_over_fill", "of", bool, False),
+
         LottieProp("font_size", "s", float),
         LottieProp("line_height", "lh", float),
         LottieProp("wrap_size", "sz", NVector),
+        LottieProp("wrap_position", "ps", NVector, False),
+
         LottieProp("text", "t", str),
         LottieProp("justify", "j", TextJustify),
         LottieProp("text_caps", "ca", TextCaps, False),
         LottieProp("tracking", "tr", float, False),
+        LottieProp("baseline_shift", "ls", float, False),
     ]
 
     def __init__(self, text="", font_size=10, color=None, font_family=""):
         self.font_family = font_family
+
         ## Text color
-        self.color = color or Color(0, 0, 0)
+        self.fill_color = color or Color(0, 0, 0)
+
+        self.stroke_color = None
+        self.stroke_width = 0
+        ## Render stroke above the fill
+        self.stroke_over_fill = None
+
         ## Line height when wrapping
         self.line_height = None
         ## Text alignment
         self.justify = TextJustify.Left
         ## Size of the box containing the text
         self.wrap_size = None
+        ## Position of the box containing the text
+        self.wrap_position = None
         ## Text
         self.text = text
         ## Font Size
@@ -144,6 +187,7 @@ class TextDocument(LottieObject):
         self.text_caps = None
         ## Text Tracking
         self.tracking = None
+        self.baseline_shift = None
 
 
 ## @ingroup Lottie

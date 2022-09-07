@@ -4,6 +4,20 @@
  * More intuitive function to import lottie
  * Utility to export to a neural network
  * Fixed SVG gradients import with default attributes
+ * Added support for text stroke
+ * Updated object model:
+    * The base class `Layer` has been split into `Layer` and `VisualLayer`
+    * `Layer.stretch` has been renamed to `Layer.time_stretch`
+    * Added layer styles
+    * `Image` asset has been split into `FileAsset` and `Image`
+    * `Image.image` has been renamed to `Image.file_name`
+    * `Image.image_path` has been renamed to `Image.path`
+    * `Image.image_data()` has been renamed to `Image.data()`
+    * Added sound asset / layer
+    * Added data source asset / layer
+    * Added camera layer
+    * Added a lot of missing properties throughout
+    * `TextDocument.color` renamed to `TextDocument.fill_color`
 
 ## 0.6.11 - 2022-01-20
  * Fancy text formatting renderer

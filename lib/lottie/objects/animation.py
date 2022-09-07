@@ -36,6 +36,23 @@ class Metadata(LottieObject):
 
 
 #ingroup Lottie
+class UserMetadata(LottieObject):
+    """!
+    User-defined metadata
+    """
+    _props = [
+        LottieProp("filename", "filename", str, False),
+        LottieProp("custom_properties", "customProps", dict, False),
+    ]
+
+    def __init__(self):
+        super().__init__()
+
+        self.filename = None
+        self.custom_properties = {}
+
+
+#ingroup Lottie
 class MotionBlur(LottieObject):
     """!
     Motion blur settings
@@ -74,12 +91,13 @@ class Animation(Composition, VisualObject):
         LottieProp("height", "h", int, False),
         LottieProp("threedimensional", "ddd", PseudoBool, False),
         LottieProp("assets", "assets", Asset, True),
-        #LottieProp("comps", "comps", Animation, True),
+        LottieProp("extra_compositions", "comps", Precomp, True),
         LottieProp("fonts", "fonts", FontList),
         LottieProp("chars", "chars", Chars, True),
         LottieProp("markers", "markers", Marker, True),
         LottieProp("motion_blur", "mb", MotionBlur, False),
-        LottieProp("metadata", "meta", Metadata, False)
+        LottieProp("metadata", "meta", Metadata, False),
+        LottieProp("user_metadata", "metadata", UserMetadata, False),
     ]
     _version = "5.5.2"
 
@@ -102,11 +120,14 @@ class Animation(Composition, VisualObject):
         self.version = self._version
         ## source items that can be used in multiple places. Comps and Images for now.
         self.assets = [] # Image, Precomp
+        ## List of Extra compositions not referenced by anything
+        self.extra_compositions = None
         ## source chars for text layers
         self.chars = None
         ## Available fonts
         self.fonts = None
         self.metadata = None
+        self.user_metadata = None
         self.motion_blur = None
         self.markers = None
 

@@ -25,7 +25,7 @@ def import_dotlottie(file, id=None):
             if an.assets:
                 for asset in an.assets:
                     if isinstance(asset, assets.Image) and not asset.is_embedded:
-                        fname = asset.image_path + asset.image
+                        fname = asset.path + asset.file_name
                         if fname in zf.namelist():
                             with zf.open(fname) as imgfile:
                                 asset.load(imgfile)

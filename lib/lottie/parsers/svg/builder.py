@@ -264,7 +264,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
             if asset.is_embedded:
                 url = asset.image
             else:
-                url = asset.image_path + asset.image
+                url = asset.path + asset.file_name
             img.attrib[self.qualified("xlink", "href")] = url
             img.attrib["width"] = str(asset.width)
             img.attrib["height"] = str(asset.height)

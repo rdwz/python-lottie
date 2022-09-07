@@ -3,27 +3,84 @@ import re
 import base64
 import mimetypes
 from io import BytesIO
-from .base import LottieObject, LottieProp, PseudoBool, Index
+from .base import LottieProp, PseudoBool, Index
 from .layers import Layer
 from .composition import Composition
+from .helpers import VisualObject
 
 
 ## @ingroup Lottie
-class Asset(LottieObject):
+class Asset(VisualObject):
     _props = [
         LottieProp("id", "id", str, False),
     ]
 
     @classmethod
     def _load_get_class(cls, lottiedict):
+        if lottiedict.get("t", None) == 3:
+            return DataSource
         if "p" in lottiedict or "u" in lottiedict:
-            return Image
+            if "w" in lottiedict:
+                return Image
+            return Sound
         if "layers" in lottiedict:
             return Precomp
 
 
+#ingroup Lottie
+class FileAsset(Asset):
+    """!
+    Asset referencing a file
+    """
+    _props = [
+        LottieProp("path", "u", str, False),
+        LottieProp("file_name", "p", str, False),
+        LottieProp("is_embedded", "e", PseudoBool, False),
+    ]
+
+    def __init__(self):
+        super().__init__()
+
+        ## Path to the directory containing a file
+        self.path = ""
+        ## Filename or data url
+        self.file_name = ""
+        ## Whether the file is embedded
+        self.is_embedded = False
+
+    def _id_from_file(self, file):
+        if not self.id:
+            if isinstance(file, str):
+                self.id = os.path.basename(file)
+            elif hasattr(file, "name"):
+                self.id = os.path.basename(file.name)
+            elif hasattr(file, "filename"):
+                self.id = os.path.basename(file.filename)
+            else:
+                self.id = "image_%s" % id(self)
+
+    def data(self):
+        """
+        Returns a tuple (format, data) with the contents of the file
+
+        `format` is a string like "png", and `data` is just raw binary data.
+
+        If it's impossible to fetch this info, returns (None, None)
+        """
+        if self.is_embedded:
+            m = re.match("data:[^/]+/([^;,]+);base64,(.*)", self.file_name)
+            if m:
+                return m.group(1), base64.b64decode(m.group(2))
+            return None, None
+        path = self.path + self.file_name
+        if os.path.isfile(path):
+            with open(path, "rb") as imgfile:
+                return os.path.splitext(path)[1][1:], imgfile.read()
+        return None, None
+
+
 ## @ingroup Lottie
-class Image(Asset):
+class Image(FileAsset):
     """!
         External image
 
@@ -32,9 +89,7 @@ class Image(Asset):
     _props = [
         LottieProp("height", "h", float, False),
         LottieProp("width", "w", float, False),
-        LottieProp("image", "p", str, False),
-        LottieProp("image_path", "u", str, False),
-        LottieProp("is_embedded", "e", PseudoBool, False),
+        LottieProp("type", "t", str, False),
     ]
 
     @staticmethod
@@ -54,12 +109,8 @@ class Image(Asset):
         self.width = 0
         ## Image ID
         self.id = id
-        ## Image name
-        self.image = ""
-        ## Image path
-        self.image_path = ""
-        ## Image data is stored as a data: url
-        self.is_embedded = False
+        ## If "seq", marks it as part of an image sequence
+        self.type = None
 
     def load(self, file, format=None):
         """!
@@ -75,29 +126,18 @@ class Image(Asset):
 
         self._id_from_file(file)
 
-        self.image_path = ""
+        self.path = ""
         if format is None:
             format = (image.format or "png").lower()
         self.width, self.height = image.size
         output = BytesIO()
         image.save(output, format=format)
-        self.image = "data:image/%s;base64,%s" % (
+        self.file_name = "data:image/%s;base64,%s" % (
             format,
             base64.b64encode(output.getvalue()).decode("ascii")
         )
         self.is_embedded = True
         return self
-
-    def _id_from_file(self, file):
-        if not self.id:
-            if isinstance(file, str):
-                self.id = os.path.basename(file)
-            elif hasattr(file, "name"):
-                self.id = os.path.basename(file.name)
-            elif hasattr(file, "filename"):
-                self.id = os.path.basename(file.filename)
-            else:
-                self.id = "image_%s" % id(self)
 
     @classmethod
     def embedded(cls, image, format=None):
@@ -113,36 +153,16 @@ class Image(Asset):
         image = Image.open(filename)
         lottie_image = cls()
         lottie_image._id_from_file(filename)
-        lottie_image.image_path, lottie_image.image = os.path.split(filename)
-        lottie_image.image_path += "/"
+        lottie_image.path, lottie_image.file_name = os.path.split(filename)
+        lottie_image.path += "/"
         lottie_image.width = image.width
         lottie_image.height = image.height
         return lottie_image
-
-    def image_data(self):
-        """
-        Returns a tuple (format, data) with the contents of the image
-
-        `format` is a string like "png", and `data` is just raw binary data.
-
-        If it's impossible to fetch this info, returns (None, None)
-        """
-        if self.is_embedded:
-            m = re.match("data:[^/]+/([^;,]+);base64,(.*)", self.image)
-            if m:
-                return m.group(1), base64.b64decode(m.group(2))
-            return None, None
-        path = self.image_path + self.image
-        if os.path.isfile(path):
-            with open(path, "rb") as imgfile:
-                return os.path.splitext(path)[1][1:], imgfile.read()
-        return None, None
 
 
 ## @ingroup Lottie
 class Precomp(Asset, Composition):
     _props = [
-        LottieProp("name", "nm", str, False),
         LottieProp("frame_rate", "fr", float, False),
     ]
 
@@ -166,3 +186,19 @@ class Precomp(Asset, Composition):
                 layer.in_point = inpoint
             if override or layer.out_point is None:
                 layer.out_point = outpoint
+
+#ingroup Lottie
+class DataSource(FileAsset):
+    """!
+    External data source, usually a JSON file
+    """
+    _props = [
+        LottieProp("type", "t", int, False),
+    ]
+    type = 3
+
+#ingroup Lottie
+class Sound(FileAsset):
+    """!
+    External sound
+    """

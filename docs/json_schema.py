@@ -31,6 +31,7 @@ name_map = {
     "CharacterData": "character-data-shape",
     "TransformShape": "transform",
     "PositionValue": "position",
+    "PseudoBool": "int-boolean",
 }
 
 
@@ -125,6 +126,10 @@ def scalar_type(json_prop, prop, default):
     elif inspect.isclass(prop.type) and issubclass(prop.type, LottieObject):
         json_prop["$ref"] = class_full_ref(prop.type)
         default = None
+    elif name == "Color string":
+        json_prop["type"] = "string"
+    elif name == "dict":
+        json_prop["type"] = "object"
     else:
         raise Exception("Handle scalar type %s" % name)
 
@@ -671,7 +676,7 @@ if __name__ == "__main__":
 
     ns = parser.parse_args()
 
-    if ns.action == "python":
+    if ns.action == "python" or ns.action == "py":
         action_generate_python(ns.ref, ns.properties, ns.schema)
         sys.exit(0)
 
@@ -682,7 +687,7 @@ if __name__ == "__main__":
         for chunk in what.split("."):
             subject = getattr(subject, chunk)
 
-    if ns.action == "check":
+    if ns.action == "check" or ns.action == "c":
         action_check(subject, ns)
     else:
         action_output(subject, ns)

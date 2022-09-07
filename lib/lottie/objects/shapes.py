@@ -76,8 +76,11 @@ class ShapeElement(VisualObject):
     _props = [
         LottieProp("hidden", "hd", bool, False),
         LottieProp("type", "ty", str, False),
-        LottieProp("property_index", "cix", int, False),
         LottieProp("blend_mode", "bm", BlendMode, False),
+        LottieProp("property_index", "ix", int, False),
+        LottieProp("css_class", "cl", str, False),
+        LottieProp("layer_xml_id", "ln", str, False),
+
     ]
     ## %Shape type.
     type = None
@@ -91,6 +94,10 @@ class ShapeElement(VisualObject):
         self.hidden = None
         ## Blend mode
         self.blend_mode = None
+        ## CSS class used by the SVG renderer
+        self.css_class = None
+        ## `id` attribute used by the SVG renderer
+        self.layer_xml_id = None
 
     def bounding_box(self, time=0):
         """!
@@ -338,7 +345,7 @@ class Ellipse(Shape):
     Ellipse shape
     """
     _props = [
-        LottieProp("position", "p", MultiDimensional, False),
+        LottieProp("position", "p", PositionValue, False),
         LottieProp("size", "s", MultiDimensional, False),
     ]
     ## %Shape type.
@@ -627,6 +634,7 @@ class BaseStroke(LottieObject):
         LottieProp("line_cap", "lc", LineCap, False),
         LottieProp("line_join", "lj", LineJoin, False),
         LottieProp("miter_limit", "ml", float, False),
+        LottieProp("animated_miter_limit", "ml2", Value, False),
         LottieProp("opacity", "o", Value, False),
         LottieProp("width", "w", Value, False),
         LottieProp("dashes", "d", StrokeDash, True),
@@ -639,6 +647,8 @@ class BaseStroke(LottieObject):
         self.line_join = LineJoin.Round
         ## Stroke Miter Limit. Only if Line Join is set to Miter.
         self.miter_limit = 0
+        ## Animatable alternative to ml
+        self.animated_miter_limit = None
         ## Stroke Opacity
         self.opacity = Value(100)
         ## Stroke Width
@@ -653,7 +663,7 @@ class Stroke(ShapeElement, BaseStroke):
     Solid stroke
     """
     _props = [
-        LottieProp("color", "c", MultiDimensional, False),
+        LottieProp("color", "c", ColorValue, False),
     ]
     ## %Shape type.
     type = "st"
@@ -797,12 +807,23 @@ class RoundedCorners(Modifier):
         self.radius = Value(radius)
 
 
+#ingroup Lottie
+class MergeMode(LottieEnum):
+    """!
+    Boolean operation on shapes
+    """
+    Normal = 1
+    Add = 2
+    Subtract = 3
+    Intersect = 4
+    ExcludeIntersections = 5
+
+
 ## @ingroup Lottie
-## @ingroup LottieCheck
 ## @note marked as unsupported by lottie
 class Merge(ShapeElement):
     _props = [
-        LottieProp("merge_mode", "mm", float, False),
+        LottieProp("merge_mode", "mm", MergeMode, False),
     ]
     ## %Shape type.
     type = "mm"
@@ -810,7 +831,7 @@ class Merge(ShapeElement):
     def __init__(self):
         ShapeElement.__init__(self)
         ## Merge Mode
-        self.merge_mode = 1
+        self.merge_mode = MergeMode.Normal
 
 
 ## @ingroup Lottie
@@ -846,33 +867,30 @@ class PuckerBloat(ShapeElement):
 
 
 #ingroup Lottie
-## @note marked as unsupported by lottie
 class ZigZag(ShapeElement):
     """!
     Changes the edges of affected shapes into a series of peaks and valleys of uniform size
     """
     _props = [
         LottieProp("shape_type", "ty", str, False),
-        LottieProp("roundness", "r", Value, False),
-        LottieProp("size", "s", Value, False),
-        LottieProp("points", "pt", Value, False),
+        LottieProp("frequency", "r", Value, False),
+        LottieProp("amplitude", "s", Value, False),
+        LottieProp("point_type", "pt", Value, False),
     ]
-    ## %Shape type.
-    type = "zz"
 
     def __init__(self):
         super().__init__()
 
-        ## Radius to maked it a smoother curve
-        self.roundness = Value(0)
+        self.shape_type = "zz"
+        ## Number of ridges per segment
+        self.frequency = None
         ## Distance between peaks and troughs
-        self.size = Value(0)
-        ## Number of ridges
-        self.points = Value(1)
+        self.amplitude = None
+        ## Point type (1 = corner, 2 = smooth)
+        self.point_type = None
 
 
 #ingroup Lottie
-## @note marked as unsupported by lottie
 class OffsetPath(ShapeElement):
     """!
     Interpolates the shape with its center point and bezier tangents with the opposite direction
