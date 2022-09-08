@@ -18,6 +18,7 @@ class MatteMode(LottieEnum):
     Luma = 3
     InvertedLuma = 4
 
+
 #ingroup Lottie
 class Layer(VisualObject):
     """!
@@ -189,7 +190,6 @@ class VisualLayer(Layer):
         @brief Removes this layer from the componsitin
         """
         self.composition.remove_layer(self)
-
 
 
 ## @ingroup Lottie

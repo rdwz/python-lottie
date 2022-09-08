@@ -187,6 +187,7 @@ class Precomp(Asset, Composition):
             if override or layer.out_point is None:
                 layer.out_point = outpoint
 
+
 #ingroup Lottie
 class DataSource(FileAsset):
     """!
@@ -196,6 +197,7 @@ class DataSource(FileAsset):
         LottieProp("type", "t", int, False),
     ]
     type = 3
+
 
 #ingroup Lottie
 class Sound(FileAsset):

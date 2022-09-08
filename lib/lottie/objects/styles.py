@@ -1,7 +1,9 @@
+import warnings
 from .base import LottieProp
 from .helpers import VisualObject
 from .properties import ColorValue, Value, GradientColors
 from .shapes import GradientType
+
 
 #ingroup Lottie
 class LayerStyle(VisualObject):
