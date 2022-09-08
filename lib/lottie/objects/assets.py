@@ -103,6 +103,8 @@ class Image(FileAsset):
         return mimetypes.guess_type(filename)
 
     def __init__(self, id=""):
+        super().__init__()
+
         ## Image Height
         self.height = 0
         ## Image Width

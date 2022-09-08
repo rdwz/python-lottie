@@ -34,6 +34,7 @@ else:
 os.makedirs(doxpath, exist_ok=True)
 
 for example in examples:
+    print("Building example %s" % example)
     example_fn = os.path.join(example_path, example + ".py")
     module = importlib.import_module(example)
 
