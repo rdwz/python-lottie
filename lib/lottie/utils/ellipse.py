@@ -1,7 +1,7 @@
 import math
 
 from ..nvector import NVector, PolarVector
-from ..objects.bezier import BezierPoint
+from ..objects.bezier import BezierPoint, Bezier
 
 
 ## @todo Just output a Bezier object
@@ -36,11 +36,10 @@ class Ellipse:
             + self.radii[1] * math.cos(self.xrot) * math.cos(t)
         )
 
-    def to_bezier(self, anglestart, angle_delta):
+    def to_bezier_points(self, anglestart, angle_delta, step=math.pi / 2):
         points = []
         angle1 = anglestart
         angle_left = abs(angle_delta)
-        step = math.pi / 2
         sign = -1 if anglestart+angle_delta < angle1 else 1
         tolerance = math.pi / 100
         if angle_left % step > tolerance:
@@ -71,6 +70,19 @@ class Ellipse:
             angle1 = angle2
 
         return points
+
+    def to_bezier(self, angle_start, angle_delta, step=math.pi / 2):
+        bezier = Bezier()
+        points = self.to_bezier_points(angle_start, angle_delta, step)
+
+        if angle_delta == math.pi * 2:
+            points.pop(0)
+            bezier.close()
+
+        for point in points:
+            bezier.add_point(point.vertex, point.in_tangent, point.out_tangent)
+        return bezier
+
 
     def _alpha(self, step):
         return math.sin(step) * (math.sqrt(4+3*math.tan(step/2)**2) - 1) / 3

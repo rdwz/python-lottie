@@ -1,10 +1,12 @@
-## Unreleased
+## Unreleased (0.7.0)
  * Improved color management
  * More accurate path shape bounding box
  * More intuitive function to import lottie
  * Utility to export to a neural network
  * Fixed SVG gradients import with default attributes
  * Added support for text stroke
+ * Chart drawing library
+ * Renamed `utils.ellipse.Ellipse.to_bezier()` to `.to_bezier_points()`
  * Updated object model:
     * The base class `Layer` has been split into `Layer` and `VisualLayer`
     * `Layer.stretch` has been renamed to `Layer.time_stretch`

@@ -389,15 +389,10 @@ class Ellipse(Shape):
     def _bezier_t(self, time):
         from ..utils.ellipse import Ellipse as EllipseConverter
 
-        bezier = Bezier()
         position = self.position.get_value(time)
         radii = self.size.get_value(time) / 2
-
         el = EllipseConverter(position, radii, 0)
-        points = el.to_bezier(0, math.pi*2)
-        for point in points[1:]:
-            bezier.add_point(point.vertex, point.in_tangent, point.out_tangent)
-
+        bezier = el.to_bezier(0, math.pi*2)
         bezier.close()
         return bezier
 
