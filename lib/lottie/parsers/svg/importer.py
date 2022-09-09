@@ -1263,7 +1263,7 @@ class PathDParser:
             return
 
         ellipse, theta1, deltatheta = Ellipse.from_svg_arc(self.p, rx, ry, xrot, large, sweep, dest)
-        points = ellipse.to_bezier(theta1, deltatheta)
+        points = ellipse.to_bezier_points(theta1, deltatheta)
 
         self._do_add_p()
         self.path.out_tangents[-1] = points[0].out_tangent
