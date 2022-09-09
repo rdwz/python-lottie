@@ -16,8 +16,9 @@ chart.data.add(0.7, Color(0, 0, 1))
 chart.compute_animation(150, 50, 30)
 chart.order = charts.RandomOrder()
 
-chart.data.normalize_values(True)
-chart.type = charts.Pie()
+# For a pie chart
+#chart.data.normalize_values(True)
+#chart.type = charts.PieGrow()
 
 animation = chart.animation()
 animation.out_point = 180

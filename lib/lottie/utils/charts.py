@@ -137,7 +137,7 @@ class Histogram(ChartType):
         return group
 
 
-class Pie(ChartType):
+class PieFan(ChartType):
     def animate(self, area: objects.BoundingBox, anim: DatumAnimation, index: int, total: int, sum_before: float):
         angle_start = sum_before * math.pi * 2
         angle_delta =  anim.datum.value * math.pi * 2
@@ -150,9 +150,6 @@ class Pie(ChartType):
 
         cache = {}
 
-        #shape.shape.value.add_point(ellipser.center)
-        #shape.shape.value.add_point(ellipser.center+ NVector(math.cos(angle_start) * ellipser.radii.x, math.sin(angle_start) * ellipser.radii.x))
-        #shape.shape.value.add_point(ellipser.center+ NVector(math.cos(angle_start+angle_delta) * ellipser.radii.x, math.sin(angle_start+angle_delta) * ellipser.radii.x))
         self.add_transition(shape, ellipser, angle_start, 0, angle_delta, anim.times.start, anim.times.fade_in, cache)
         self.add_transition(shape, ellipser, angle_start, angle_delta, 0, anim.times.fade_out, anim.times.end, cache)
 
@@ -190,6 +187,56 @@ class Pie(ChartType):
             angle_delta = f * angle_delta_to + (1-f) * angle_delta_from
             time = f * time_to + (1-f) * time_from
             self.add_arc(shape, ellipser, angle_start, angle_delta, time, cache)
+
+
+class PieGrow(ChartType):
+    def animate(self, area: objects.BoundingBox, anim: DatumAnimation, index: int, total: int, sum_before: float):
+        angle_start = sum_before * math.pi * 2
+        angle_delta =  anim.datum.value * math.pi * 2
+
+        group = objects.Group()
+        shape = group.add_shape(objects.Path())
+
+        cache = {}
+
+        rad = min(area.width, area.height) / 2
+        bez_0 = self.arc_to_bezier(area.center(), 0, 0, 0)
+        bez_1 = self.arc_to_bezier(area.center(), angle_start, angle_delta, rad)
+
+        shape.shape.add_keyframe(anim.times.start,    bez_0, easing.EaseOut())
+        shape.shape.add_keyframe(anim.times.fade_in,  bez_1, easing.EaseOut())
+        shape.shape.add_keyframe(anim.times.fade_out, bez_1, easing.EaseOut())
+        shape.shape.add_keyframe(anim.times.end,      bez_0, easing.EaseOut())
+
+        anim.datum.add_style(group)
+        return group
+
+    def arc_to_bezier(self, center, angle_start, angle_delta, radius):
+        if radius == 0:
+            bez = objects.Bezier()
+            p = center
+            bez.add_point(p)
+            bez.add_point(p)
+            bez.add_point(p)
+            bez.add_point(p)
+        elif angle_delta == 0:
+            bez = objects.Bezier()
+            p = center + NVector(math.cos(angle_start) * radius, math.sin(angle_start) * radius)
+            bez.add_point(p)
+            bez.add_point(p)
+            bez.add_point(p)
+            bez.add_point(p)
+        else:
+            ellipser = ellipse.Ellipse(center, NVector(radius, radius), 0)
+            bez = ellipser.to_bezier(angle_start, angle_delta, angle_delta / 4)
+            bez.in_tangents[0] = bez.out_tangents[-1] = NVector(0, 0)
+
+        # Dunno why we need to add it twice but it doesn't work with just one o_O
+        bez.add_point(center)
+        bez.add_point(center)
+        bez.close()
+
+        return bez
 
 
 class AnimationOrder:
