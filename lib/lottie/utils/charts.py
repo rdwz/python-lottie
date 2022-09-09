@@ -116,7 +116,7 @@ class ChartType:
 
 class Histogram(ChartType):
     def animate(self, area: objects.BoundingBox, anim: DatumAnimation, index: int, total: int, sum_before: float):
-        x = area.width / total * (index +  .5) + area.x1
+        x = area.width / total * (index + .5) + area.x1
         width = area.width / (total + 1)
         height = area.height * anim.datum.value
 
@@ -140,7 +140,7 @@ class Histogram(ChartType):
 class PieFan(ChartType):
     def animate(self, area: objects.BoundingBox, anim: DatumAnimation, index: int, total: int, sum_before: float):
         angle_start = sum_before * math.pi * 2
-        angle_delta =  anim.datum.value * math.pi * 2
+        angle_delta = anim.datum.value * math.pi * 2
 
         rad = min(area.width, area.height) / 2
         ellipser = ellipse.Ellipse(area.center(), NVector(rad, rad), 0)
@@ -160,7 +160,10 @@ class PieFan(ChartType):
         if angle_delta not in cache:
             if angle_delta == 0:
                 bez = objects.Bezier()
-                p = ellipser.center + NVector(math.cos(angle_start) * ellipser.radii.x, math.sin(angle_start) * ellipser.radii.x)
+                p = ellipser.center + NVector(
+                    math.cos(angle_start) * ellipser.radii.x,
+                    math.sin(angle_start) * ellipser.radii.x
+                )
                 bez.add_point(p)
                 bez.add_point(p)
                 bez.add_point(p)
@@ -179,7 +182,6 @@ class PieFan(ChartType):
 
         shape.shape.add_keyframe(time, bez)
 
-
     def add_transition(self, shape, ellipser, angle_start, angle_delta_from, angle_delta_to, time_from, time_to, cache):
         chunks = round(max(angle_delta_from, angle_delta_to) / math.pi * 100)
         for step in range(chunks + 1):
@@ -192,12 +194,10 @@ class PieFan(ChartType):
 class PieGrow(ChartType):
     def animate(self, area: objects.BoundingBox, anim: DatumAnimation, index: int, total: int, sum_before: float):
         angle_start = sum_before * math.pi * 2
-        angle_delta =  anim.datum.value * math.pi * 2
+        angle_delta = anim.datum.value * math.pi * 2
 
         group = objects.Group()
         shape = group.add_shape(objects.Path())
-
-        cache = {}
 
         rad = min(area.width, area.height) / 2
         bez_0 = self.arc_to_bezier(area.center(), 0, 0, 0)

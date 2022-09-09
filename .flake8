@@ -13,5 +13,5 @@
 # E741 ambiguous variable name
 # W503 line break before binary operator
 # W504 line break after binary operator
-ignore = F401,F403,F405,E116,E117,E226,E261,E262,E265,E266,E731,E741,W503,W504
+ignore = F401,F403,F405,E116,E117,E226,E261,E262,E265,E266,E731,E741,W503,W504,E241
 max-line-length = 128

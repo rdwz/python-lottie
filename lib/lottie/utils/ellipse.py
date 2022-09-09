@@ -83,7 +83,6 @@ class Ellipse:
             bezier.add_point(point.vertex, point.in_tangent, point.out_tangent)
         return bezier
 
-
     def _alpha(self, step):
         return math.sin(step) * (math.sqrt(4+3*math.tan(step/2)**2) - 1) / 3
 
