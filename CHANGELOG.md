@@ -1,4 +1,4 @@
-## Unreleased (0.7.0)
+## 0.7.0 - 2022-09-11
  * Improved color management
  * More accurate path shape bounding box
  * More intuitive function to import lottie
