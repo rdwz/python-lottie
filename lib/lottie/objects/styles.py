@@ -18,16 +18,16 @@ class LayerStyle(VisualObject):
 
     @classmethod
     def _load_get_class(cls, lottiedict):
-        if not LayerStyle._classses:
-            LayerStyle._classses = {
+        if not LayerStyle._classes:
+            LayerStyle._classes = {
                 sc.type: sc
                 for sc in LayerStyle.__subclasses__()
             }
         type_id = lottiedict["ty"]
-        if type_id not in LayerStyle._classses:
+        if type_id not in LayerStyle._classes:
             warnings.warn("Unknown style type: %s" % type_id)
             return LayerStyle
-        return LayerStyle._classses[type_id]
+        return LayerStyle._classes[type_id]
 
 
 #ingroup Lottie
