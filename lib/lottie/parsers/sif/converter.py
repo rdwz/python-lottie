@@ -251,7 +251,7 @@ class Converter:
 
     def _convert_easing(self, start: api.Interpolation, end: api.Interpolation):
         if api.Interpolation.Constant in (start, end):
-            return easing.Hold()
+            return easing.Jump()
         if start == end:
             return self._convert_easing_part(start)
         return easing.Split(self._convert_easing_part(start), self._convert_easing_part(end))
