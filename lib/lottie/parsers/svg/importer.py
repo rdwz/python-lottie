@@ -492,8 +492,8 @@ class SvgParser(SvgHandler):
             group.add_shape(fill)
 
     def _parseshape_use(self, element, shape_parent, parent_style):
-        link = element.attrib[self.qualified("xlink", "href")]
-        if link.startswith("#"):
+        link = element.attrib.get(self.qualified("xlink", "href"))
+        if link and link.startswith("#"):
             id = link[1:]
             base_element = self.document.find(".//*[@id='%s']" % id)
             use_style = self.parse_style(element, parent_style)
