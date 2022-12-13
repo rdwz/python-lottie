@@ -1,3 +1,6 @@
+## Unreleased
+ * Fixed import in blender addon
+
 ## 0.7.0 - 2022-09-11
  * Improved color management
  * More accurate path shape bounding box

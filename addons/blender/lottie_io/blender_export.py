@@ -1,14 +1,15 @@
 import mathutils
 import bpy_extras
 import bpy
-from lottie import NVector
-import lottie
 import os
 import sys
 import math
 from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(__file__))
+
+from lottie import NVector
+import lottie
 
 
 class LottieMaterialException(Exception):
