@@ -1,5 +1,6 @@
 ## Unreleased
  * Fixed import in blender addon
+ * Aded support for parsing hexadecimal colors that include alphs
 
 ## 0.7.0 - 2022-09-11
  * Improved color management

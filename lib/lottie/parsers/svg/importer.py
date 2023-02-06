@@ -134,7 +134,6 @@ class SvgRadialGradient(SvgGradient):
 def parse_color(color, current_color=Color(0, 0, 0, 1)):
     """!
     Parses CSS colors
-
     @see https://www.w3.org/wiki/CSS/Properties/color
     """
     # #112233
@@ -143,6 +142,12 @@ def parse_color(color, current_color=Color(0, 0, 0, 1)):
     # #fff
     if re.match(r"^#[0-9a-fA-F]{3}$", color):
         return Color(int(color[1], 16) / 0xf, int(color[2], 16) / 0xf, int(color[3], 16) / 0xf, 1)
+    # #112233
+    if re.match(r"^#[0-9a-fA-F]{8}$", color):
+        return Color(int(color[1:3], 16) / 0xff, int(color[3:5], 16) / 0xff, int(color[5:7], 16) / 0xff, int(color[7:9], 16) / 0xff)
+    # #fff
+    if re.match(r"^#[0-9a-fA-F]{4}$", color):
+        return Color(int(color[1], 16) / 0xf, int(color[2], 16) / 0xf, int(color[3], 16) / 0xf, int(color[4], 16) / 0xf)
     # rgba(123, 123, 123, 0.7)
     match = re.match(r"^rgba\s*\(\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9.eE]+)\s*\)$", color)
     if match:
