@@ -403,21 +403,25 @@ class Color(NVector):
 
     def component_names(self):
         comps = None
+        alpha_short = True
 
         if self._mode == ColorMode.RGB:
-            comps = ({"r", "red"}, {"g", "green"}, {"b", "blue"})
+            comps = [{"r", "red"}, {"g", "green"}, {"b", "blue"}]
         elif self._mode == ColorMode.HSV:
-            comps = ({"h", "hue"}, {"s", "saturation"}, {"v", "value"})
+            comps = [{"h", "hue"}, {"s", "saturation"}, {"v", "value"}]
         elif self._mode == ColorMode.HSL:
-            comps = ({"h", "hue"}, {"s", "saturation"}, {"l", "lightness"})
+            comps = [{"h", "hue"}, {"s", "saturation"}, {"l", "lightness"}]
         elif self._mode == ColorMode.LCH_uv:  # in (ColorMode.LCH_uv, ColorMode.LCH_ab):
-            comps = ({"l", "luma", "luminance"}, {"c", "choma"}, {"h", "hue"})
+            comps = [{"l", "luma", "luminance"}, {"c", "choma"}, {"h", "hue"}]
         elif self._mode == ColorMode.XYZ:
-            comps = "xyz"
+            comps = ["x", "y", "z"]
         elif self._mode == ColorMode.LUV:
-            comps = "luv"
+            comps = ["l", "u", "v"]
         elif self._mode == ColorMode.LAB:
-            comps = "lab"
+            comps = ["l", "a", "b"]
+            alpha_short = False
+
+        comps.append({"a", "alpha"})
 
         return comps
 
