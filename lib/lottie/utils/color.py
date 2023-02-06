@@ -403,7 +403,6 @@ class Color(NVector):
 
     def component_names(self):
         comps = None
-        alpha_short = True
 
         if self._mode == ColorMode.RGB:
             comps = [{"r", "red"}, {"g", "green"}, {"b", "blue"}]
@@ -419,7 +418,6 @@ class Color(NVector):
             comps = ["l", "u", "v"]
         elif self._mode == ColorMode.LAB:
             comps = ["l", "a", "b"]
-            alpha_short = False
 
         comps.append({"a", "alpha"})
 
