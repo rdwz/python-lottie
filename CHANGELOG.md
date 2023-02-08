@@ -1,6 +1,8 @@
 ## Unreleased
  * Fixed import in blender addon
- * Aded support for parsing hexadecimal colors that include alphs
+ * Aded support for parsing hexadecimal colors that include alpha
+ * Loading a lottie with missing properties will retain the default value
+ * Fixed parsing for lottie files with unknown effects
 
 ## 0.7.0 - 2022-09-11
  * Improved color management

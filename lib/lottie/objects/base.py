@@ -115,6 +115,11 @@ class LottieProp:
         """
         if isinstance(getattr(obj.__class__, self.name, None), property):
             return
+
+        # Keep the default on missing value
+        if hasattr(obj, self.name) and value is None:
+            return
+
         return setattr(obj, self.name, value)
 
     def load_from_parent(self, lottiedict):
