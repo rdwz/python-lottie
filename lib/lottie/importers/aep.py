@@ -29,6 +29,9 @@ class BigEndian(Endianness):
     def decode_float64(self, data):
         return struct.unpack(">d", data)[0]
 
+    def decode_float32(self, data):
+        return struct.unpack(">f", data)[0]
+
 
 class LittleEndian(Endianness):
     def decode(self, data):
@@ -36,6 +39,9 @@ class LittleEndian(Endianness):
 
     def decode_float64(self, data):
         return struct.unpack("<d", data)[0]
+
+    def decode_float32(self, data):
+        return struct.unpack("<f", data)[0]
 
 
 @dataclass
@@ -138,53 +144,117 @@ def read_mn(parser, header, length):
 
 
 class StructuredData:
-    def __init__(self, parser, header, length):
+    def read_structure(self, structure, parser, length):
+        start = parser.file.tell()
+
+        i = 0
+        for name, size, type in structure:
+            if name == "":
+                name = "_%s" % i
+                i += 1
+
+            setattr(self, name, self.read_value(parser, size, type))
+
+        read = parser.file.tell() - start
+        if read > length:
+            raise Exception("Missing data for %s" % self.__class__.__name__)
+        elif read < length:
+            setattr(self, "_%s" % i, parser.read(length - read))
+
+
+    def read_value(self, parser, length, type):
+        if isinstance(type, list):
+            val = []
+            for name, size, subtype in type:
+                val.append(self.read_value(parser, size, subtype))
+            return val
+
         data = parser.read(length)
-        self.parse(data, parser.endian)
+        if type is bytes:
+            return data
+        elif type is int:
+            return parser.endian.decode(data)
+        elif type is str:
+            return data.decode("utf8")
+        elif type is float:
+            return parser.endian.decode_float64(data)
+
+    @classmethod
+    def read(cls, parser, header, length):
+        value = cls()
+        value.read_structure(cls.structure, parser, length)
+        return value
 
 
 class CompData(StructuredData):
-    def __init__(self, parser, header, length):
-        start = parser.file.tell()
-        parser.read(4)
-        self.fr_den = parser.read_number(4)
-        self.fr_num = parser.read_number(4)
-        parser.read(32)
-        self.time_den = parser.read_number(4)
-        self.time_num = parser.read_number(4)
-        self.color = parser.read(3)
-        parser.read(85)
-        self.width = parser.read_number(2)
-        self.height = parser.read_number(2)
-        parser.read(12)
-        self.frame_rate = parser.read_number(2)
-        read = parser.file.tell() - start
-        if read > length:
-            raise Exception("Missing composition data")
-        elif read < length:
-            parser.read(length - read)
+    structure = [
+        ("", 13, bytes),
+        ("comp_start", 2, int),
+        ("", 6, bytes),
+        ("playhead_position", 2, int),
+        ("", 6, bytes),
+        ("start_frame", 2, int),
+        ("", 6, bytes),
+        ("end_frame", 2, int),
+        ("", 6, bytes),
+        ("comp_duration", 2, int),
+        ("", 5, bytes),
+        ("color", 3, [
+            ("", 1, int),
+            ("", 1, int),
+            ("", 1, int),
+        ]),
+        ("", 85, bytes),
+        ("width", 2, int),
+        ("height", 2, int),
+        ("", 12, bytes),
+        ("frame_rate", 2, int),
+    ]
 
+    def read_structure(self, structure, parser, length):
+        super().read_structure(structure, parser, length)
+        self.playhead_position /= 2
+        self.start_frame /= 2
+        self.end_frame /= 2
+        self.comp_duration /= 2
+        self.comp_start /= 2
 
 
 class LayerData(StructuredData):
+    structure = [
+        ("", 4, bytes),
+        ("quality", 2, int),
+        ("", 15, bytes),
+        ("start_frame", 2, int),
+        ("", 6, bytes),
+        ("end_frame", 2, int),
+        ("", 6, bytes),
+        ("attrs", 3, bytes),
+        ("source_id", 4, int),
+    ]
+
     def attr_bit(self, byte, bit):
         return (self.attrs[byte] & (1 << bit)) >> bit
 
-    def parse(self, data, endian):
-        self.quality = endian.decode(data[4:6])
-        self.attrs = data[37:40]
-        self.source_id = endian.decode(data[40:44])
-        self.blend_mode = self.attr_bit(0, 2)
+    def read_structure(self, structure, parser, length):
+        super().read_structure(structure, parser, length)
         self.ddd = self.attr_bit(1, 2) == 1
         self.motion_blur = self.attr_bit(2, 3) == 1
         self.effects = self.attr_bit(2, 2) == 1
         self.locked = self.attr_bit(2, 5) == 1
+        self.start_frame /= 2
+        self.end_frame /= 2
 
 
 class ItemData(StructuredData):
-    def parse(self, data, endian):
-        self.type = endian.decode(data[0:2])
-        self.id = endian.decode(data[16:20])
+    structure = [
+        ("type", 2, int),
+        ("", 14, bytes),
+        ("id", 4, int),
+    ]
+
+    def read_structure(self, structure, parser, length):
+        super().read_structure(structure, parser, length)
         self.type_name = "?"
         if self.type == 4:
             self.type_name = "composition"
@@ -195,105 +265,129 @@ class ItemData(StructuredData):
 
 
 class PropertyMeta(StructuredData):
-    def parse(self, data, endian):
-        self._1 = data[0:3]
-        self.components = data[3]
-        self._2 = data[4:]
+    structure = [
+        ("", 3, bytes),
+        ("components", 1, int),
+    ]
 
 
 def read_floats(parser, header, length):
-        if length < 8:
-            return parser.read(length)
+    if length < 8:
+        return parser.read(length)
 
-        if length == 8:
-            return parser.endian.decode_float64(parser.read(8))
+    if length == 8:
+        return parser.endian.decode_float64(parser.read(8))
 
-        floats = {}
-        to_read = length
-        while to_read >= 8:
-            floats[len(floats)] = parser.endian.decode_float64(parser.read(8))
-            to_read -= 8
+    floats = {}
+    to_read = length
+    while to_read >= 8:
+        floats["_%s" % len(floats)] = parser.endian.decode_float64(parser.read(8))
+        to_read -= 8
 
-        if to_read:
-            floats["?"] = parser.read(to_read)
-        return floats
-
-
-def format_yaml(val):
-    if isinstance(val, bytes):
-        return "\"%s\"" % str(val)[2:-1]
-    return val
-
-def debug_yaml(chunk, indp=""):
-    ind = indp + ("- " if indp else "")
-    if isinstance(chunk.data, RiffList):
-        print("%s%s: %s" % (ind, chunk.header, chunk.data.type))
-        for sub in chunk.data.children:
-            debug_yaml(sub, indp + "    ")
-    else:
-        dict_data = {}
-
-        if isinstance(chunk.data, dict):
-            print_data = ""
-            dict_data = chunk.data
-        elif isinstance(chunk.data, StructuredData):
-            print_data = ""
-            dict_data = vars(chunk.data)
-        else:
-            print_data = chunk.data
-
-        print("%s%s: %s" % (ind, chunk.header, format_yaml(print_data)))
-
-        for k, v in dict_data.items():
-            print("%s    - %s: %s" % (indp, k, format_yaml(v)))
+    if to_read:
+        floats["_%s" % len(floats)] = parser.read(to_read)
+    return floats
 
 
-def chunk_to_group(chunk, endian):
-    lottie_obj = objects.shapes.Group()
+def read_floats32(parser, header, length):
+    if length < 4:
+        return parser.read(length)
 
-    for item in chunk.data.children:
-        pass
+    if length == 4:
+        return parser.endian.decode_float64(parser.read(8))
 
-    return lottie_obj
+    floats = {}
+    to_read = length
+    while to_read >= 4:
+        floats["_%s" % len(floats)] = parser.endian.decode_float32(parser.read(4))
+        to_read -= 4
 
-
-def chunk_to_shape(chunk, endian):
-    if chunk.data.type == "tdgp":
-        return chunk_to_group(chunk, endian)
-
-
-def chunk_to_layer(chunk, endian):
-    lottie_obj = objects.layers.ShapeLayer()
-
-    for item in chunk.data.children:
-        if item.header == "Utf8":
-            lottie_obj.name = item.data
-        elif item.header == "LIST":
-            shape = chunk_to_shape(item, endian)
-            if shape:
-                lottie_obj.add_shape(shape)
-
-    return lottie_obj
+    if to_read:
+        floats["_%s" % len(floats)] = parser.read(to_read)
+    return floats
 
 
+class AepParser(RiffParser):
+    def __init__(self, file):
+        super().__init__(file)
 
-def chunk_to_animation(fold, endian):
-    anim = objects.Animation()
-    for chunk in fold.data.children:
-        if chunk.header == "LIST" and chunk.data.type == "Item":
-            break
+        if self.header.format != "Egg!":
+            raise Exception("Not an AEP file")
 
-    for item in chunk.data.children:
-        if item.header == "Utf8":
-            anim.name = item.data
-        elif item.header == "cdta":
-            anim.width = item.data.width
-            anim.height = item.data.height
-            anim.frame_rate = item.data.frame_rate
-        elif item.header == "LIST" and item.data.type == "Layr":
-            anim.layers.append(chunk_to_layer(item, endian))
+        self.chunk_parsers = {
+            "tdsn": read_sub_chunks,
+            "Utf8": read_utf8,
+            "tdmn": read_mn,
+            "cdta": CompData.read,
+            "ldta": LayerData.read,
+            "idta": ItemData.read,
+            "tdb4": AepParser.read_tdb4,
+            "cdat": AepParser.read_cdat,
+            "tdum": read_floats,
+            "tduM": read_floats,
+            "tdsb": lambda p, h, l: p.read_number(l),
+        }
+        self.prop_dimension = None
 
-    return anim
+    def read_tdb4(self, header, length):
+        data = PropertyMeta.read(self, header, length)
+        self.prop_dimension = data.components
+        return data
+
+    def read_cdat(self, header, length):
+        dim = self.prop_dimension
+        self.prop_dimension = None
+
+        if dim is None or length < dim * 8:
+            return self.read(length)
+
+        value = StructuredData()
+        value.read_structure([("value", 0, [("", 8, float)] * dim)], self, length)
+        return value
+
+    def chunk_to_group(self, chunk):
+        lottie_obj = objects.shapes.Group()
+
+        for item in chunk.data.children:
+            pass
+
+        return lottie_obj
+
+    def chunk_to_shape(self, chunk,):
+        if chunk.data.type == "tdgp":
+            return self.chunk_to_group(chunk)
+
+    def chunk_to_layer(self, chunk):
+        lottie_obj = objects.layers.ShapeLayer()
+
+        for item in chunk.data.children:
+            if item.header == "Utf8":
+                lottie_obj.name = item.data
+            elif item.header == "LIST":
+                shape = self.chunk_to_shape(item)
+                if shape:
+                    lottie_obj.add_shape(shape)
+
+        return lottie_obj
+
+
+    def chunk_to_animation(self, fold):
+        anim = objects.Animation()
+        for chunk in fold.data.children:
+            if chunk.header == "LIST" and chunk.data.type == "Item":
+                break
+
+        for item in chunk.data.children:
+            if item.header == "Utf8":
+                anim.name = item.data
+            elif item.header == "cdta":
+                anim.width = item.data.width
+                anim.height = item.data.height
+                anim.frame_rate = item.data.frame_rate
+            elif item.header == "LIST" and item.data.type == "Layr":
+                anim.layers.append(self.chunk_to_layer(item))
+
+        return anim
 
 
 @importer("AfterEffect Project", ["aep"])
@@ -302,26 +396,8 @@ def import_aep(file):
         with open(file, "rb") as fileobj:
             return import_aep(fileobj)
 
-    parser = RiffParser(file)
-
-    if parser.header.format != "Egg!":
-        raise Exception("Not an AEP file")
-
-    parser.chunk_parsers = {
-        "tdsn": read_sub_chunks,
-        "Utf8": read_utf8,
-        "tdmn": read_mn,
-        "cdta": CompData,
-        "ldta": LayerData,
-        "idta": ItemData,
-        "tdb4": PropertyMeta,
-        "cdat": read_floats,
-        "ldat": read_floats,
-        "tdum": read_floats,
-        "tduM": read_floats,
-    }
+    parser = AepParser(file)
 
     for chunk in parser:
-        debug_yaml(chunk)
         if chunk.header == "LIST" and chunk.data.type == "Fold":
-            return chunk_to_animation(chunk, parser.endian)
+            return parser.chunk_to_animation(chunk)
