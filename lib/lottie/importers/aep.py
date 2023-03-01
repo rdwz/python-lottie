@@ -154,6 +154,9 @@ class StructuredData:
     def finalize(self):
         pass
 
+    def attr_bit(self, byte, bit):
+        return (self.attrs[byte] & (1 << bit)) >> bit
+
     @classmethod
     def reader(cls, parser, header, length):
         reader = StructuredReader(parser, length, cls.structure, cls)
@@ -255,9 +258,6 @@ class LayerData(StructuredData):
         ("source_id", 4, int),
     ]
 
-    def attr_bit(self, byte, bit):
-        return (self.attrs[byte] & (1 << bit)) >> bit
-
     def finalize(self):
         self.ddd = self.attr_bit(1, 2) == 1
         self.motion_blur = self.attr_bit(2, 3) == 1
@@ -286,7 +286,11 @@ class PropertyMeta(StructuredData):
     structure = [
         ("", 3, bytes),
         ("components", 1, int),
+        ("attrs", 2, bytes),
     ]
+
+    def finalize(self):
+        self.position = self.attr_bit(1, 3) == 1
 
 
 def read_floats(parser, header, length):
@@ -378,6 +382,7 @@ class AepParser(RiffParser):
         self.prop_dimension = None
         self.prop_animated = False
         self.prop_shape = False
+        self.prop_position = False
         self.frame_mult = 1
 
     def read_tdb4(self, header, length):
@@ -385,6 +390,7 @@ class AepParser(RiffParser):
         self.prop_dimension = data.components
         self.prop_animated = False
         self.prop_shape = False
+        self.prop_position = data.position
         return data
 
     def read_cdat(self, header, length):
@@ -406,16 +412,21 @@ class AepParser(RiffParser):
         reader = StructuredReader(self, length, None)
         value = reader.value
         value.keyframes = []
-
-        while reader.to_read >= 8 * self.prop_dimension + 8 + 32:
+        extra = (3+2*self.prop_dimension)*8 if self.prop_position else 0
+        while reader.to_read >= 8 * self.prop_dimension + 8 + 32 + extra:
             reader.value = StructuredData()
             reader.skip(1)
             reader.read_attribute("time", 2, int)
             reader.skip(5)
-            reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
-            reader.read_attribute("dunno", 0, [("", 8, float)] * 3)
-            reader.read_attribute("o_x", 8, float)
-            #reader.skip(32)
+            if self.prop_position:
+                reader.read_attribute("", 0, [("", 8, float)] * 6)
+                reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
+                reader.read_attribute("pos_tan_in", 0, [("", 8, float)] * self.prop_dimension)
+                reader.read_attribute("pos_tan_out", 0, [("", 8, float)] * self.prop_dimension)
+            else:
+                reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
+                reader.read_attribute("", 0, [("", 8, float)] * 3)
+                reader.read_attribute("o_x", 8, float)
             value.keyframes.append(reader.value)
 
         reader.value = value
