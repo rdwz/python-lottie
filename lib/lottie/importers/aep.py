@@ -3,6 +3,8 @@ import struct
 
 from .base import importer
 from .. import objects
+from .. import NVector
+from ..utils.color import Color
 
 
 class Endianness:
@@ -113,6 +115,8 @@ class RiffParser:
 
         chunk = RiffChunk(header, length, data)
 
+        self.on_chunk(chunk)
+
         # Skip pad byte
         if length % 2:
             self.read(1)
@@ -125,6 +129,9 @@ class RiffParser:
                 return
 
             yield self.read_chunk()
+
+    def on_chunk(self, chunk):
+        pass
 
 
 def read_sub_chunks(parser, header, length):
@@ -144,46 +151,70 @@ def read_mn(parser, header, length):
 
 
 class StructuredData:
-    def read_structure(self, structure, parser, length):
-        start = parser.file.tell()
+    def finalize(self):
+        pass
 
-        i = 0
-        for name, size, type in structure:
-            if name == "":
-                name = "_%s" % i
-                i += 1
-
-            setattr(self, name, self.read_value(parser, size, type))
-
-        read = parser.file.tell() - start
-        if read > length:
-            raise Exception("Missing data for %s" % self.__class__.__name__)
-        elif read < length:
-            setattr(self, "_%s" % i, parser.read(length - read))
+    @classmethod
+    def reader(cls, parser, header, length):
+        reader = StructuredReader(parser, length, cls.structure, cls)
+        reader.read_structure()
+        return reader.value
 
 
-    def read_value(self, parser, length, type):
+class StructuredReader:
+    def __init__(self, parser, length, structure, cls=StructuredData):
+        self.value = cls()
+        self.structure = structure
+        self.index = 0
+        self.parser = parser
+        self.length = length
+        self.to_read = length
+
+    def skip(self, byte_count):
+        self.read_attribute("", byte_count, bytes)
+
+    def read_attribute(self, name, size, type):
+        if name == "":
+            name = "_%s" % self.index
+            self.index += 1
+
+        setattr(self.value, name, self.read_value(size, type))
+
+    def read_structure(self):
+        for name, size, type in self.structure:
+            self.read_attribute(name, size, type)
+
+        self.finalize()
+
+        return self.value
+
+    def finalize(self):
+        if self.to_read:
+            setattr(self.value, "_%s" % self.index, self.parser.read(self.to_read))
+
+        self.value.finalize()
+
+    def read_value(self, length, type):
         if isinstance(type, list):
             val = []
             for name, size, subtype in type:
-                val.append(self.read_value(parser, size, subtype))
+                val.append(self.read_value(size, subtype))
             return val
 
-        data = parser.read(length)
+        if length > self.to_read:
+            raise Exception("Not enough data in chunk")
+
+        data = self.parser.read(length)
+        self.to_read -= length
+
         if type is bytes:
             return data
         elif type is int:
-            return parser.endian.decode(data)
+            return self.parser.endian.decode(data)
         elif type is str:
             return data.decode("utf8")
         elif type is float:
-            return parser.endian.decode_float64(data)
-
-    @classmethod
-    def read(cls, parser, header, length):
-        value = cls()
-        value.read_structure(cls.structure, parser, length)
-        return value
+            return self.parser.endian.decode_float64(data)
 
 
 class CompData(StructuredData):
@@ -211,8 +242,7 @@ class CompData(StructuredData):
         ("frame_rate", 2, int),
     ]
 
-    def read_structure(self, structure, parser, length):
-        super().read_structure(structure, parser, length)
+    def finalize(self):
         self.playhead_position /= 2
         self.start_frame /= 2
         self.end_frame /= 2
@@ -236,8 +266,7 @@ class LayerData(StructuredData):
     def attr_bit(self, byte, bit):
         return (self.attrs[byte] & (1 << bit)) >> bit
 
-    def read_structure(self, structure, parser, length):
-        super().read_structure(structure, parser, length)
+    def finalize(self):
         self.ddd = self.attr_bit(1, 2) == 1
         self.motion_blur = self.attr_bit(2, 3) == 1
         self.effects = self.attr_bit(2, 2) == 1
@@ -253,8 +282,7 @@ class ItemData(StructuredData):
         ("id", 4, int),
     ]
 
-    def read_structure(self, structure, parser, length):
-        super().read_structure(structure, parser, length)
+    def finalize(self):
         self.type_name = "?"
         if self.type == 4:
             self.type_name = "composition"
@@ -308,6 +336,26 @@ def read_floats32(parser, header, length):
 
 
 class AepParser(RiffParser):
+    placeholder = "-_0_/-"
+    shapes = {
+        "ADBE Vector Filter - Trim": objects.shapes.Trim,
+        "ADBE Vector Group": objects.shapes.Group,
+        "ADBE Vector Shape - Group": objects.shapes.Path,
+        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
+    }
+    properties = {
+        "ADBE Vector Position": ("position", None),
+        "ADBE Vector Trim Start": ("start", None),
+        #"ADBE Vector Shape": ("shape", None)
+        "ADBE Vector Stroke Color": ("color", lambda arr: Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)),
+        "ADBE Vector Stroke Width": ("width", None),
+        "ADBE Anchor Point": ("anchor_point", None),
+        "ADBE Position": ("position", None),
+        "ADBE Rotate Z": ("rotation", None),
+        "ADBE Opacity": ("opacity", lambda v: v * 100),
+        "ADBE Scale": ("scale", lambda v: v * 100),
+    }
+
     def __init__(self, file):
         super().__init__(file)
 
@@ -318,20 +366,25 @@ class AepParser(RiffParser):
             "tdsn": read_sub_chunks,
             "Utf8": read_utf8,
             "tdmn": read_mn,
-            "cdta": CompData.read,
-            "ldta": LayerData.read,
-            "idta": ItemData.read,
+            "cdta": CompData.reader,
+            "ldta": LayerData.reader,
+            "idta": ItemData.reader,
             "tdb4": AepParser.read_tdb4,
             "cdat": AepParser.read_cdat,
+            "ldat": AepParser.read_ldat,
             "tdum": read_floats,
             "tduM": read_floats,
             "tdsb": lambda p, h, l: p.read_number(l),
         }
         self.prop_dimension = None
+        self.prop_animated = False
+        self.prop_shape = False
 
     def read_tdb4(self, header, length):
-        data = PropertyMeta.read(self, header, length)
+        data = PropertyMeta.reader(self, header, length)
         self.prop_dimension = data.components
+        self.prop_animated = False
+        self.prop_shape = False
         return data
 
     def read_cdat(self, header, length):
@@ -341,21 +394,91 @@ class AepParser(RiffParser):
         if dim is None or length < dim * 8:
             return self.read(length)
 
-        value = StructuredData()
-        value.read_structure([("value", 0, [("", 8, float)] * dim)], self, length)
+        value = StructuredReader(self, length, [("value", 0, [("", 8, float)] * dim)])
+        return value.read_structure()
+
+    def read_ldat(self, header, length):
+        if not self.prop_animated:
+            return self.read(length)
+
+        self.prop_animated = False
+
+        reader = StructuredReader(self, length, None)
+        value = reader.value
+        value.keyframes = []
+
+        while reader.to_read >= 8 * self.prop_dimension + 8 + 32:
+            reader.value = StructuredData()
+            reader.skip(1)
+            reader.read_attribute("time", 2, int)
+            reader.value.time /= 2
+            reader.skip(5)
+            reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
+            reader.read_attribute("dunno", 0, [("", 8, float)] * 3)
+            reader.read_attribute("o_x", 8, float)
+            #reader.skip(32)
+            value.keyframes.append(reader.value)
+
+        reader.value = value
+        reader.finalize()
+
         return value
 
-    def chunk_to_group(self, chunk):
-        lottie_obj = objects.shapes.Group()
+    def on_chunk(self, chunk):
+        if chunk.header == "shph":
+            self.prop_shape = True
+        elif chunk.header == "lhd3":
+            self.prop_animated = not self.prop_shape
 
+    def read_properties(self, object, chunk):
+        match_name = None
         for item in chunk.data.children:
-            pass
+            if item.header == "tdmn":
+                match_name = item.data
+            elif item.header == "LIST" and item.data.type == "tdbs":
+                self.set_property(object, match_name, item)
+                match_name = None
+            elif item.header == "LIST" and item.data.type == "tdgp":
+                if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
+                    self.read_properties(object, item)
+                    match_name = None
+                elif match_name == "ADBE Vector Transform Group" or match_name == "ADBE Transform Group":
+                    self.read_properties(object.transform, item)
+                elif match_name in self.shapes:
+                    child = self.shapes[match_name]()
+                    object.add_shape(child)
+                    child.match_name = match_name
+                    match_name = None
+                    self.read_properties(child, item)
+            elif item.header == "Utf8" and item.data != self.placeholder:
+                object.name = item.data
 
-        return lottie_obj
+    def set_property(self, object, match_name, chunk):
+        meta = self.properties.get(match_name)
+        if not meta:
+            return
 
-    def chunk_to_shape(self, chunk,):
-        if chunk.data.type == "tdgp":
-            return self.chunk_to_group(chunk)
+        prop_name, converter = meta
+        if converter is None:
+            converter = lambda x: x
+
+        prop = objects.MultiDimensional()
+        for item in chunk.data.children:
+            if item.header == "cdat":
+                if len(item.data.value) == 1:
+                    prop.value = converter(item.data.value)
+                else:
+                    prop.value = converter(NVector(*item.data.value))
+            elif item.header == "LIST" and item.data.type == "list":
+                self.set_property_keyframes(prop, converter, item)
+
+        setattr(object, prop_name, prop)
+
+    def set_property_keyframes(self, prop, converter, chunk):
+        for item in chunk.data.children:
+            if item.header == "ldat" and hasattr(item.data, "keyframes"):
+                for keyframe in item.data.keyframes:
+                    prop.add_keyframe(keyframe.time, converter(NVector(*keyframe.value)))
 
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
@@ -363,13 +486,14 @@ class AepParser(RiffParser):
         for item in chunk.data.children:
             if item.header == "Utf8":
                 lottie_obj.name = item.data
+            elif item.header == "ldta":
+                lottie_obj.in_point = item.data.start_frame
+                lottie_obj.out_point = item.data.end_frame
+                lottie_obj.threedimensional = item.data.ddd
             elif item.header == "LIST":
-                shape = self.chunk_to_shape(item)
-                if shape:
-                    lottie_obj.add_shape(shape)
+                self.read_properties(lottie_obj, item)
 
         return lottie_obj
-
 
     def chunk_to_animation(self, fold):
         anim = objects.Animation()
@@ -384,6 +508,8 @@ class AepParser(RiffParser):
                 anim.width = item.data.width
                 anim.height = item.data.height
                 anim.frame_rate = item.data.frame_rate
+                anim.in_point = item.data.start_frame
+                anim.out_point = item.data.end_frame
             elif item.header == "LIST" and item.data.type == "Layr":
                 anim.layers.append(self.chunk_to_layer(item))
 

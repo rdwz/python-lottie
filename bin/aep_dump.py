@@ -12,7 +12,9 @@ from lottie.importers.aep import RiffList, StructuredData, AepParser
 
 def value_to_yaml(val):
     if isinstance(val, bytes):
-        return "\"%s\"" % str(val)[2:-1]
+        naked = str(val)[2:-1]
+        naked = naked.replace(r'"', r'\"')
+        return "\"%s\"" % naked
     return val
 
 
@@ -23,24 +25,36 @@ def chunk_to_yaml(chunk, indp=""):
         for sub in chunk.data.children:
             chunk_to_yaml(sub, indp + "    ")
     else:
-        dict_data = {}
+        structured_value_to_yaml(chunk.header, chunk.data, indp)
 
-        if isinstance(chunk.data, dict):
-            print_data = ""
-            dict_data = chunk.data
-        elif isinstance(chunk.data, StructuredData):
-            print_data = ""
-            dict_data = vars(chunk.data)
+
+def structured_value_to_yaml(title, value, indp):
+    ind = indp + ("- " if indp else "")
+    items = []
+
+    if isinstance(value, dict):
+        print_data = ""
+        items = value.items()
+    elif isinstance(value, StructuredData):
+        print_data = ""
+        items = vars(value).items()
+    elif isinstance(value, (list, tuple)):
+        if len(value) < 5 and len(value) > 0 and isinstance(value[0], (int, float)):
+            print_data = value
         else:
-            print_data = chunk.data
+            print_data = ""
+            items = [("", it) for it in value]
+    else:
+        print_data = value
 
-        print("%s%s: %s" % (ind, chunk.header, value_to_yaml(print_data)))
+    if title:
+        print("%s%s: %s" % (ind, title, value_to_yaml(print_data)))
+    else:
+        print("%s%s" % (ind, value_to_yaml(print_data)))
 
-        for k, v in dict_data.items():
-            if k[0] != "_":
-                print("%s    - %s: %s" % (indp, k, value_to_yaml(v)))
-            else:
-                print("%s    - %s" % (indp, value_to_yaml(v)))
+    for k, v in items:
+        structured_value_to_yaml("" if k.startswith("_") else k, v, indp + "    ")
+
 
 
 
