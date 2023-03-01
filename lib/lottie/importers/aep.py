@@ -48,9 +48,9 @@ class LittleEndian(Endianness):
 
 @dataclass
 class RiffChunk:
-    header : str
-    length : int
-    data : bytes
+    header: str
+    length: int
+    data: bytes
 
 
 @dataclass
@@ -58,11 +58,12 @@ class RiffList:
     type : str
     children : tuple
 
+
 @dataclass
 class RiffHeader:
-    endianness : Endianness
-    length : int
-    format : str
+    endianness: Endianness
+    length: int
+    format: str
 
 
 class RiffParser:
@@ -245,6 +246,7 @@ class CompData(StructuredData):
         ("frame_rate", 2, int),
     ]
 
+
 class LayerData(StructuredData):
     structure = [
         ("", 4, bytes),
@@ -332,6 +334,7 @@ def read_floats32(parser, header, length):
 def convert_value_color(arr):
     return Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)
 
+
 class AepParser(RiffParser):
     placeholder = "-_0_/-"
     shapes = {
@@ -412,10 +415,15 @@ class AepParser(RiffParser):
         reader = StructuredReader(self, length, None)
         value = reader.value
         value.keyframes = []
-        extra = (3+2*self.prop_dimension)*8 if self.prop_position else 0
-        while reader.to_read >= 8 * self.prop_dimension + 8 + 32 + extra:
+        size = (6 + 3 * self.prop_dimension) if self.prop_position else (4 + self.prop_dimension)
+        while reader.to_read >= 8 + size * 8:
             reader.value = StructuredData()
-            reader.skip(1)
+            reader.read_attribute("attrs", 1, bytes)
+            if reader.value.attrs != b'\0':
+                reader.skip(7 + size * 8)
+                value.keyframes.append(reader.value)
+                continue
+
             reader.read_attribute("time", 2, int)
             reader.skip(5)
             if self.prop_position:
@@ -494,7 +502,8 @@ class AepParser(RiffParser):
         for item in chunk.data.children:
             if item.header == "ldat" and hasattr(item.data, "keyframes"):
                 for keyframe in item.data.keyframes:
-                    prop.add_keyframe(keyframe.time * self.frame_mult, converter(NVector(*keyframe.value)))
+                    if keyframe.attrs == b'\0':
+                        prop.add_keyframe(keyframe.time * self.frame_mult, converter(NVector(*keyframe.value)))
 
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
