@@ -113,6 +113,7 @@ class RiffParser:
         if header == "LIST":
             end = self.file.tell() + length
             type = self.read_str(4)
+            self.on_list_start(type)
             children = []
             while self.file.tell() < end:
                 children.append(self.read_chunk())
@@ -143,6 +144,9 @@ class RiffParser:
             yield self.read_chunk()
 
     def on_chunk(self, chunk):
+        pass
+
+    def on_list_start(self, type):
         pass
 
 
@@ -397,6 +401,7 @@ class AepParser(RiffParser):
         self.prop_animated = False
         self.prop_shape = False
         self.prop_position = False
+        self.prop_gradient = False
         self.frame_mult = 1
 
     def read_tdb4(self, header, length):
@@ -418,7 +423,7 @@ class AepParser(RiffParser):
         return value.read_structure()
 
     def read_ldat(self, header, length):
-        if not self.prop_animated:
+        if not self.prop_animated or self.prop_gradient:
             return self.read(length)
 
         self.prop_animated = False
@@ -458,6 +463,12 @@ class AepParser(RiffParser):
             self.prop_shape = True
         elif chunk.header == "lhd3":
             self.prop_animated = not self.prop_shape
+        elif chunk.header == "LIST" and chunk.data.type == "GCst":
+            self.prop_gradient = False
+
+    def on_list_start(self, type):
+        if type == "GCst":
+            self.prop_gradient = True
 
     def read_properties(self, object, chunk):
         match_name = None
@@ -532,6 +543,9 @@ class AepParser(RiffParser):
                 for keyframe in item.data.keyframes:
                     if keyframe.attrs == b'\0':
                         prop.add_keyframe(keyframe.time * self.frame_mult, converter(NVector(*keyframe.value)))
+
+        if len(prop.keyframes) == 1:
+            prop.clear_animation(prop.keyframes[0].start)
 
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
