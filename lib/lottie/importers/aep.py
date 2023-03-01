@@ -242,14 +242,6 @@ class CompData(StructuredData):
         ("frame_rate", 2, int),
     ]
 
-    def finalize(self):
-        self.playhead_position /= 2
-        self.start_frame /= 2
-        self.end_frame /= 2
-        self.comp_duration /= 2
-        self.comp_start /= 2
-
-
 class LayerData(StructuredData):
     structure = [
         ("", 4, bytes),
@@ -271,8 +263,6 @@ class LayerData(StructuredData):
         self.motion_blur = self.attr_bit(2, 3) == 1
         self.effects = self.attr_bit(2, 2) == 1
         self.locked = self.attr_bit(2, 5) == 1
-        self.start_frame /= 2
-        self.end_frame /= 2
 
 
 class ItemData(StructuredData):
@@ -335,25 +325,34 @@ def read_floats32(parser, header, length):
     return floats
 
 
+def convert_value_color(arr):
+    return Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)
+
 class AepParser(RiffParser):
     placeholder = "-_0_/-"
     shapes = {
         "ADBE Vector Filter - Trim": objects.shapes.Trim,
+        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
+        "ADBE Vector Graphic - Fill": objects.shapes.Fill,
         "ADBE Vector Group": objects.shapes.Group,
         "ADBE Vector Shape - Group": objects.shapes.Path,
-        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
+        "ADBE Vector Shape - Rect": objects.shapes.Rect,
+        "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
     }
     properties = {
         "ADBE Vector Position": ("position", None),
         "ADBE Vector Trim Start": ("start", None),
         #"ADBE Vector Shape": ("shape", None)
-        "ADBE Vector Stroke Color": ("color", lambda arr: Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)),
+        "ADBE Vector Stroke Color": ("color", convert_value_color),
+        "ADBE Vector Fill Color": ("color", convert_value_color),
         "ADBE Vector Stroke Width": ("width", None),
         "ADBE Anchor Point": ("anchor_point", None),
         "ADBE Position": ("position", None),
         "ADBE Rotate Z": ("rotation", None),
         "ADBE Opacity": ("opacity", lambda v: v * 100),
         "ADBE Scale": ("scale", lambda v: v * 100),
+        "ADBE Vector Rect Size": ("size", None),
+        "ADBE Vector Ellipse Size": ("size", None),
     }
 
     def __init__(self, file):
@@ -379,6 +378,7 @@ class AepParser(RiffParser):
         self.prop_dimension = None
         self.prop_animated = False
         self.prop_shape = False
+        self.frame_mult = 1
 
     def read_tdb4(self, header, length):
         data = PropertyMeta.reader(self, header, length)
@@ -411,7 +411,6 @@ class AepParser(RiffParser):
             reader.value = StructuredData()
             reader.skip(1)
             reader.read_attribute("time", 2, int)
-            reader.value.time /= 2
             reader.skip(5)
             reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
             reader.read_attribute("dunno", 0, [("", 8, float)] * 3)
@@ -435,6 +434,12 @@ class AepParser(RiffParser):
         for item in chunk.data.children:
             if item.header == "tdmn":
                 match_name = item.data
+            elif item.header == "tdsb":
+                object.hidden = (item.data & 1) == 0
+            elif item.header == "tdsn" and len(item.data.children) > 0:
+                name = item.data.children[0]
+                if name.header == "Utf8" and name.data != self.placeholder:
+                    object.name = name.data
             elif item.header == "LIST" and item.data.type == "tdbs":
                 self.set_property(object, match_name, item)
                 match_name = None
@@ -466,7 +471,7 @@ class AepParser(RiffParser):
         for item in chunk.data.children:
             if item.header == "cdat":
                 if len(item.data.value) == 1:
-                    prop.value = converter(item.data.value)
+                    prop.value = converter(item.data.value[0])
                 else:
                     prop.value = converter(NVector(*item.data.value))
             elif item.header == "LIST" and item.data.type == "list":
@@ -478,7 +483,7 @@ class AepParser(RiffParser):
         for item in chunk.data.children:
             if item.header == "ldat" and hasattr(item.data, "keyframes"):
                 for keyframe in item.data.keyframes:
-                    prop.add_keyframe(keyframe.time, converter(NVector(*keyframe.value)))
+                    prop.add_keyframe(keyframe.time * self.frame_mult, converter(NVector(*keyframe.value)))
 
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
@@ -487,8 +492,8 @@ class AepParser(RiffParser):
             if item.header == "Utf8":
                 lottie_obj.name = item.data
             elif item.header == "ldta":
-                lottie_obj.in_point = item.data.start_frame
-                lottie_obj.out_point = item.data.end_frame
+                lottie_obj.in_point = item.data.start_frame * self.frame_mult
+                lottie_obj.out_point = item.data.end_frame * self.frame_mult
                 lottie_obj.threedimensional = item.data.ddd
             elif item.header == "LIST":
                 self.read_properties(lottie_obj, item)
@@ -508,8 +513,9 @@ class AepParser(RiffParser):
                 anim.width = item.data.width
                 anim.height = item.data.height
                 anim.frame_rate = item.data.frame_rate
-                anim.in_point = item.data.start_frame
-                anim.out_point = item.data.end_frame
+                self.frame_mult = item.data.frame_rate / 100
+                anim.in_point = item.data.start_frame * self.frame_mult
+                anim.out_point = item.data.end_frame * self.frame_mult
             elif item.header == "LIST" and item.data.type == "Layr":
                 anim.layers.append(self.chunk_to_layer(item))
 
