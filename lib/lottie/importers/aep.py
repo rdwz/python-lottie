@@ -1,3 +1,4 @@
+from xml.etree import ElementTree
 from dataclasses import dataclass
 import struct
 
@@ -55,8 +56,18 @@ class RiffChunk:
 
 @dataclass
 class RiffList:
-    type : str
-    children : tuple
+    type: str
+    children: tuple
+
+    def find(self, header):
+        for ch in self.children:
+            if ch.header == header:
+                return ch
+
+    def find_list(self, type):
+        for ch in self.children:
+            if ch.header == "LIST" and ch.data.type == type:
+                return ch
 
 
 @dataclass
@@ -141,10 +152,6 @@ def read_sub_chunks(parser, header, length):
     while parser.file.tell() < end:
         children.append(parser.read_chunk())
     return RiffList("", tuple(children))
-
-
-def read_utf8(parser, header, length):
-    return parser.read(length).decode("utf8")
 
 
 def read_mn(parser, header, length):
@@ -345,6 +352,7 @@ class AepParser(RiffParser):
         "ADBE Vector Shape - Group": objects.shapes.Path,
         "ADBE Vector Shape - Rect": objects.shapes.Rect,
         "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
+        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
     }
     properties = {
         "ADBE Vector Position": ("position", None),
@@ -360,6 +368,9 @@ class AepParser(RiffParser):
         "ADBE Scale": ("scale", lambda v: v * 100),
         "ADBE Vector Rect Size": ("size", None),
         "ADBE Vector Ellipse Size": ("size", None),
+        "ADBE Vector Grad Start Pt": ("start_point", None),
+        "ADBE Vector Grad End Pt": ("end_point", None),
+        "ADBE Vector Grad Colors": ("colors", None),
     }
 
     def __init__(self, file):
@@ -370,7 +381,7 @@ class AepParser(RiffParser):
 
         self.chunk_parsers = {
             "tdsn": read_sub_chunks,
-            "Utf8": read_utf8,
+            "Utf8": AepParser.read_utf8,
             "tdmn": read_mn,
             "cdta": CompData.reader,
             "ldta": LayerData.reader,
@@ -459,23 +470,40 @@ class AepParser(RiffParser):
                 name = item.data.children[0]
                 if name.header == "Utf8" and name.data != self.placeholder:
                     object.name = name.data
+            elif item.header == "Utf8" and item.data != self.placeholder:
+                object.name = item.data
             elif item.header == "LIST" and item.data.type == "tdbs":
                 self.set_property(object, match_name, item)
-                match_name = None
             elif item.header == "LIST" and item.data.type == "tdgp":
                 if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
                     self.read_properties(object, item)
-                    match_name = None
                 elif match_name == "ADBE Vector Transform Group" or match_name == "ADBE Transform Group":
                     self.read_properties(object.transform, item)
                 elif match_name in self.shapes:
                     child = self.shapes[match_name]()
                     object.add_shape(child)
                     child.match_name = match_name
-                    match_name = None
                     self.read_properties(child, item)
-            elif item.header == "Utf8" and item.data != self.placeholder:
-                object.name = item.data
+            elif item.header == "LIST" and item.data.type == "GCst" and match_name == "ADBE Vector Grad Colors":
+                prop = object.colors.colors
+                for i, grad in enumerate(item.data.find_list("GCky").data.children):
+                    if grad.header == "Utf8":
+                        if not prop.animated:
+                            prop.value = parse_gradient_xml(grad.data, object.colors)
+                            break
+                        elif len(prop.keyframes) < i:
+                            prop.keyframes[i].value = parse_gradient_xml(grad.data, object.colors)
+
+    def read_utf8(self, header, length):
+        data = self.read(length).decode("utf8")
+        if data.startswith("<?xml version='1.0'?>"):
+            dom = ElementTree.fromstring(data)
+            if dom.tag == "prop.map":
+                return xml_value_to_python(dom)
+            else:
+                return dom
+        else:
+            return data
 
     def set_property(self, object, match_name, chunk):
         meta = self.properties.get(match_name)
@@ -523,7 +551,7 @@ class AepParser(RiffParser):
     def chunk_to_animation(self, fold):
         anim = objects.Animation()
         for chunk in fold.data.children:
-            if chunk.header == "LIST" and chunk.data.type == "Item":
+            if chunk.header == "LIST" and chunk.data.type == "Item" and chunk.data.find("idta").data.type == 4:
                 break
 
         for item in chunk.data.children:
@@ -540,6 +568,64 @@ class AepParser(RiffParser):
                 anim.layers.append(self.chunk_to_layer(item))
 
         return anim
+
+
+def xml_value_to_python(element):
+    if element.tag == "prop.map":
+        return xml_value_to_python(element[0])
+    elif element.tag == "prop.list":
+        return xml_list_to_dict(element)
+    elif element.tag == "array":
+        return xml_array_to_list(element)
+    elif element.tag == "int":
+        return int(element.text)
+    elif element.tag == "float":
+        return float(element.text)
+    elif element.tag == "string":
+        return element.text
+    else:
+        return element
+
+
+def xml_array_to_list(element):
+    data = []
+    for ch in element:
+        if ch.tag != "array.type":
+            data.append(xml_value_to_python(ch))
+    return data
+
+
+def xml_list_to_dict(element):
+    data = {}
+    for pair in element.findall("prop.pair"):
+        key = None
+        value = None
+        for ch in pair:
+            if ch.tag == "key":
+                key = ch.text
+            else:
+                value = xml_value_to_python(ch)
+        data[key] = value
+
+    return data
+
+
+def parse_gradient_xml(gradient, colors_prop):
+    flat = []
+
+    data = gradient["Gradient Color Data"]
+
+    for stop in data["Color Stops"]["Stops List"].values():
+        colors = stop["Stops Color"]
+        flat += [colors[0], colors[2], colors[3], colors[4]]
+
+    for stop in data["Alpha Stops"]["Stops List"].values():
+        alpha = stop["Stops Alpha"]
+        flat += [alpha[0], alpha[2]]
+
+    colors_prop.count = data["Color Stops"]["Stops Size"]
+
+    return NVector(*flat)
 
 
 @importer("AfterEffect Project", ["aep"])
