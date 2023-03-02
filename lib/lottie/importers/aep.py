@@ -311,6 +311,7 @@ class AepParser(RiffParser):
         "ADBE Vector Grad Start Pt": ("start_point", None),
         "ADBE Vector Grad End Pt": ("end_point", None),
         "ADBE Vector Grad Colors": ("colors", None),
+        "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
     }
 
     def __init__(self, file):
@@ -479,15 +480,11 @@ class AepParser(RiffParser):
         elif self.prop_gradient:
             size = 7
         else:
-            size = 4 + self.prop_dimension
+            size = 5 * self.prop_dimension
 
         while reader.to_read >= 8 + size * 8:
             reader.value = StructuredData()
             reader.read_attribute("attrs", 1, bytes)
-            if reader.value.attrs != b'\0':
-                reader.skip(7 + size * 8)
-                value.keyframes.append(reader.value)
-                continue
 
             reader.read_attribute("time", 2, int)
             reader.skip(5)
@@ -503,8 +500,10 @@ class AepParser(RiffParser):
                 reader.skip(8)
             else:
                 reader.read_attribute_array("value", self.prop_dimension, 8, float)
-                reader.read_attribute_array("", 3, 8, float)
-                reader.read_attribute("o_x", 8, float)
+                reader.read_attribute_array("", self.prop_dimension, 8, float)
+                reader.read_attribute_array("", self.prop_dimension, 8, float)
+                reader.read_attribute_array("", self.prop_dimension, 8, float)
+                reader.read_attribute_array("", self.prop_dimension, 8, float)
             value.keyframes.append(reader.value)
 
         reader.value = value
