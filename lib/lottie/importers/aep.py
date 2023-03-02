@@ -293,25 +293,38 @@ class AepParser(RiffParser):
         "ADBE Vector Shape - Rect": objects.shapes.Rect,
         "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
         "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
+        "ADBE Vector Shape - Star": objects.shapes.Star,
     }
     properties = {
-        "ADBE Vector Position": ("position", None),
-        "ADBE Vector Trim Start": ("start", None),
         #"ADBE Vector Shape": ("shape", None)
+        "ADBE Vector Position": ("position", None),
+        "ADBE Vector Rect Size": ("size", None),
+        "ADBE Vector Ellipse Size": ("size", None),
+        "ADBE Vector Star Type": ("star_type", objects.shapes.StarType),
+        "ADBE Vector Star Points": ("points", None),
+        "ADBE Vector Star Inner Radius": ("inner_radius", None),
+        "ADBE Vector Star Outer Radius": ("outer_radius", None),
+        "ADBE Vector Star Inner Roundess": ("inner_roundness", None),
+
         "ADBE Vector Stroke Color": ("color", convert_value_color),
         "ADBE Vector Fill Color": ("color", convert_value_color),
         "ADBE Vector Stroke Width": ("width", None),
+        "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
+        "ADBE Vector Stroke Line Cap": ("line_cap", objects.shapes.LineCap),
+        "ADBE Vector Stroke Line Join": ("line_join", objects.shapes.LineJoin),
+        "ADBE Vector Grad Start Pt": ("start_point", None),
+        "ADBE Vector Grad End Pt": ("end_point", None),
+        "ADBE Vector Grad Colors": ("colors", None),
+
+        "ADBE Vector Trim Start": ("start", None),
+        "ADBE Vector Trim End": ("end", None),
+        "ADBE Vector Trim Offset": ("offset", None),
+
         "ADBE Anchor Point": ("anchor_point", None),
         "ADBE Position": ("position", None),
         "ADBE Rotate Z": ("rotation", None),
         "ADBE Opacity": ("opacity", lambda v: v * 100),
         "ADBE Scale": ("scale", lambda v: v * 100),
-        "ADBE Vector Rect Size": ("size", None),
-        "ADBE Vector Ellipse Size": ("size", None),
-        "ADBE Vector Grad Start Pt": ("start_point", None),
-        "ADBE Vector Grad End Pt": ("end_point", None),
-        "ADBE Vector Grad Colors": ("colors", None),
-        "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
     }
 
     def __init__(self, file):
@@ -590,6 +603,9 @@ class AepParser(RiffParser):
                     prop.value = converter(NVector(*item.data.value))
             elif item.header == "LIST" and item.data.type == "list":
                 self.set_property_keyframes(prop, converter, item)
+            elif item.header == "Utf8":
+                # TODO should convert expressions the same way that bodymovin does
+                prop.expression = item.data
 
         setattr(object, prop_name, prop)
 
