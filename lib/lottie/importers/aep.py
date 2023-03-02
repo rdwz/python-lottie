@@ -121,7 +121,7 @@ class RiffParser:
                 children.append(self.read_chunk())
             data = RiffList(type, tuple(children))
         elif header in self.chunk_parsers:
-            data = self.chunk_parsers[header](self, header, length)
+            data = self.chunk_parsers[header](self, length)
         else:
             data = self.read(length)
 
@@ -152,27 +152,17 @@ class RiffParser:
         pass
 
 
-def read_sub_chunks(parser, header, length):
-    end = parser.file.tell() + length
-    children = []
-    while parser.file.tell() < end:
-        children.append(parser.read_chunk())
-    return RiffList("", tuple(children))
-
-
-def read_mn(parser, header, length):
-    return parser.read(length).strip(b"\0").decode("utf8")
+    def read_sub_chunks(self, length):
+        end = self.file.tell() + length
+        children = []
+        while self.file.tell() < end:
+            children.append(self.read_chunk())
+        return RiffList("", tuple(children))
 
 
 class StructuredData:
-    def finalize(self):
-        pass
-
-    def attr_bit(self, byte, bit):
-        return (self.attrs[byte] & (1 << bit)) >> bit
-
     @classmethod
-    def reader(cls, parser, header, length):
+    def reader(cls, parser, length):
         reader = StructuredReader(parser, length, cls.structure, cls)
         reader.read_structure()
         return reader.value
@@ -190,12 +180,18 @@ class StructuredReader:
     def skip(self, byte_count):
         self.read_attribute("", byte_count, bytes)
 
-    def read_attribute(self, name, size, type):
+    def read_attribute_string0(self, name):
+        self.set_attribute(name, self.read_string0())
+
+    def set_attribute(self, name, value):
         if name == "":
             name = "_%s" % self.index
             self.index += 1
 
-        setattr(self.value, name, self.read_value(size, type))
+        setattr(self.value, name, value)
+
+    def read_attribute(self, name, size, type):
+        self.set_attribute(name, self.read_value(size, type))
 
     def read_structure(self):
         for name, size, type in self.structure:
@@ -209,7 +205,15 @@ class StructuredReader:
         if self.to_read:
             setattr(self.value, "_%s" % self.index, self.parser.read(self.to_read))
 
-        self.value.finalize()
+    def read_string0(self):
+        read = b''
+        while self.to_read > 0:
+            byte = self.parser.read(1)
+            self.to_read -= 1
+            if byte == b'\0':
+                break
+            read += byte
+        return read.decode("utf8")
 
     def read_value(self, length, type):
         if isinstance(type, list):
@@ -234,81 +238,11 @@ class StructuredReader:
             return self.parser.endian.decode_float64(data)
 
 
-class CompData(StructuredData):
-    structure = [
-        ("", 13, bytes),
-        ("comp_start", 2, int),
-        ("", 6, bytes),
-        ("playhead_position", 2, int),
-        ("", 6, bytes),
-        ("start_frame", 2, int),
-        ("", 6, bytes),
-        ("end_frame", 2, int),
-        ("", 6, bytes),
-        ("comp_duration", 2, int),
-        ("", 5, bytes),
-        ("color", 3, [
-            ("", 1, int),
-            ("", 1, int),
-            ("", 1, int),
-        ]),
-        ("", 85, bytes),
-        ("width", 2, int),
-        ("height", 2, int),
-        ("", 12, bytes),
-        ("frame_rate", 2, int),
-    ]
+    def attr_bit(self, name, byte, bit):
+        setattr(self.value, name, (self.value.attrs[byte] & (1 << bit)) != 0)
 
 
-class LayerData(StructuredData):
-    structure = [
-        ("", 4, bytes),
-        ("quality", 2, int),
-        ("", 15, bytes),
-        ("start_frame", 2, int),
-        ("", 6, bytes),
-        ("end_frame", 2, int),
-        ("", 6, bytes),
-        ("attrs", 3, bytes),
-        ("source_id", 4, int),
-    ]
-
-    def finalize(self):
-        self.ddd = self.attr_bit(1, 2) == 1
-        self.motion_blur = self.attr_bit(2, 3) == 1
-        self.effects = self.attr_bit(2, 2) == 1
-        self.locked = self.attr_bit(2, 5) == 1
-
-
-class ItemData(StructuredData):
-    structure = [
-        ("type", 2, int),
-        ("", 14, bytes),
-        ("id", 4, int),
-    ]
-
-    def finalize(self):
-        self.type_name = "?"
-        if self.type == 4:
-            self.type_name = "composition"
-        elif self.type == 1:
-            self.type_name = "folder"
-        elif self.type == 7:
-            self.type_name = "footage"
-
-
-class PropertyMeta(StructuredData):
-    structure = [
-        ("", 3, bytes),
-        ("components", 1, int),
-        ("attrs", 2, bytes),
-    ]
-
-    def finalize(self):
-        self.position = self.attr_bit(1, 3) == 1
-
-
-def read_floats(parser, header, length):
+def read_floats(parser, length):
     if length < 8:
         return parser.read(length)
 
@@ -326,7 +260,7 @@ def read_floats(parser, header, length):
     return floats
 
 
-def read_floats32(parser, header, length):
+def read_floats32(parser, length):
     if length < 4:
         return parser.read(length)
 
@@ -386,19 +320,41 @@ class AepParser(RiffParser):
             raise Exception("Not an AEP file")
 
         self.chunk_parsers = {
-            "tdsn": read_sub_chunks,
+            "tdsn": RiffParser.read_sub_chunks,
             "Utf8": AepParser.read_utf8,
-            "tdmn": read_mn,
-            "cdta": CompData.reader,
-            "ldta": LayerData.reader,
-            "idta": ItemData.reader,
+            "tdmn": AepParser.read_mn,
+            "cdta": AepParser.read_cdta,
+            "ldta": AepParser.read_ldta,
+            "idta": AepParser.read_idta,
             "tdb4": AepParser.read_tdb4,
             "cdat": AepParser.read_cdat,
             "ldat": AepParser.read_ldat,
             "tdum": read_floats,
             "tduM": read_floats,
-            "tdsb": lambda p, h, l: p.read_number(l),
-            "pprf": AepParser.read_pprf
+            "tdsb": AepParser.read_number,
+            "pprf": AepParser.read_pprf,
+            "fvdv": AepParser.read_number,
+            "ftts": AepParser.read_number,
+            "fifl": AepParser.read_number,
+            "fipc": AepParser.read_number,
+            "fiop": AepParser.read_number,
+            "foac": AepParser.read_number,
+            "fiac": AepParser.read_number,
+            "fvdv": AepParser.read_number,
+            "wsnm": AepParser.read_utf16,
+            "fcid": AepParser.read_number,
+            "fovc": AepParser.read_number,
+            "fovi": AepParser.read_number,
+            "fits": AepParser.read_number,
+            "fivc": AepParser.read_number,
+            "fivi": AepParser.read_number,
+            "fidi": AepParser.read_number,
+            "fimr": AepParser.read_number,
+            "CsCt": AepParser.read_number,
+            "CapL": AepParser.read_number,
+            "CcCt": AepParser.read_number,
+            "mrid": AepParser.read_number,
+            "numS": AepParser.read_number,
         }
         self.prop_dimension = None
         self.prop_animated = False
@@ -407,18 +363,28 @@ class AepParser(RiffParser):
         self.prop_gradient = False
         self.frame_mult = 1
 
-    def read_pprf(self, header, length):
+    def read_mn(self, length):
+        return self.read(length).strip(b"\0").decode("utf8")
+
+    def read_pprf(self, length):
         return ImageCms.ImageCmsProfile(io.BytesIO(self.read(length)))
 
-    def read_tdb4(self, header, length):
-        data = PropertyMeta.reader(self, header, length)
+    def read_tdb4(self, length):
+        reader = StructuredReader(self, length, None)
+        reader.skip(3)
+        reader.read_attribute("components", 1, int)
+        reader.read_attribute("attrs", 2, bytes)
+        reader.finalize()
+        reader.attr_bit("position", 1, 3)
+        data = reader.value
+
         self.prop_dimension = data.components
         self.prop_animated = False
         self.prop_shape = False
         self.prop_position = data.position
         return data
 
-    def read_cdat(self, header, length):
+    def read_cdat(self, length):
         dim = self.prop_dimension
         self.prop_dimension = None
 
@@ -428,7 +394,78 @@ class AepParser(RiffParser):
         value = StructuredReader(self, length, [("value", 0, [("", 8, float)] * dim)])
         return value.read_structure()
 
-    def read_ldat(self, header, length):
+    def read_cdta(self, length):
+        reader = StructuredReader(self, length, None)
+
+        reader.skip(13)
+        reader.read_attribute("comp_start", 2, int)
+        reader.skip(6)
+        reader.read_attribute("playhead_position", 2, int)
+        reader.skip(6)
+        reader.read_attribute("start_frame", 2, int)
+        reader.skip(6)
+        reader.read_attribute("end_frame", 2, int)
+        reader.skip(6)
+        reader.read_attribute("comp_duration", 2, int)
+        reader.skip(5)
+        reader.read_attribute("color", 3, [
+            ("", 1, int),
+            ("", 1, int),
+            ("", 1, int),
+        ])
+        reader.skip(85)
+        reader.read_attribute("width", 2, int)
+        reader.read_attribute("height", 2, int)
+        reader.skip(12)
+        reader.read_attribute("frame_rate", 2, int)
+
+        reader.finalize()
+        return reader.value
+
+    def read_ldta(self, length):
+        reader = StructuredReader(self, length, None)
+        reader.skip(4)
+        reader.read_attribute("quality", 2, int)
+        reader.skip(15)
+        reader.read_attribute("start_frame", 2, int)
+        reader.skip(6)
+        reader.read_attribute("end_frame", 2, int)
+        reader.skip(6)
+        reader.read_attribute("attrs", 3, bytes)
+        reader.read_attribute("source_id", 4, int)
+        reader.skip(20)
+        reader.read_attribute_string0("name")
+
+        reader.finalize()
+
+        reader.attr_bit("ddd", 1, 2)
+        reader.attr_bit("motion_blur", 2, 3)
+        reader.attr_bit("effects", 2, 2)
+        reader.attr_bit("locked", 2, 5)
+
+        return reader.value
+
+
+    def read_idta(self, length):
+        reader = StructuredReader(self, length, None)
+
+        reader.read_attribute("type", 2, int)
+        reader.skip(14)
+        reader.read_attribute("id", 4, int)
+
+        reader.finalize()
+
+        reader.value.type_name = "?"
+        if reader.value.type == 4:
+            reader.value.type_name = "composition"
+        elif reader.value.type == 1:
+            reader.value.type_name = "folder"
+        elif reader.value.type == 7:
+            reader.value.type_name = "footage"
+
+        return reader.value
+
+    def read_ldat(self, length):
         if not self.prop_animated or self.prop_gradient:
             return self.read(length)
 
@@ -511,7 +548,7 @@ class AepParser(RiffParser):
                         elif len(prop.keyframes) < i:
                             prop.keyframes[i].value = parse_gradient_xml(grad.data, object.colors)
 
-    def read_utf8(self, header, length):
+    def read_utf8(self, length):
         data = self.read(length).decode("utf8")
         if data.startswith("<?xml version='1.0'?>"):
             dom = ElementTree.fromstring(data)
@@ -521,6 +558,9 @@ class AepParser(RiffParser):
                 return dom
         else:
             return data
+
+    def read_utf16(self, length):
+        return self.read(length).decode("utf16")
 
     def set_property(self, object, match_name, chunk):
         meta = self.properties.get(match_name)

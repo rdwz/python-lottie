@@ -3,6 +3,7 @@
 import sys
 import os
 import argparse
+#from etree import ElementTree
 from PIL import ImageCms
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -88,6 +89,11 @@ parser.add_argument(
     type=int,
     help="When to wrap long sequences of bytes"
 )
+parser.add_argument(
+    "--xmp",
+    action="store_true",
+    help="If present, dump the XMP data after the RIFX data"
+)
 
 args = parser.parse_args()
 
@@ -96,3 +102,7 @@ with open(args.infile, "rb") as f:
 
     for chunk in aep_parser:
         chunk_to_yaml(chunk, args.wrap_bytes)
+
+    if args.xmp:
+        print("_xm[: _")
+        print(f.read().decode("utf8"))
