@@ -1,6 +1,8 @@
+import io
 from xml.etree import ElementTree
 from dataclasses import dataclass
 import struct
+from PIL import ImageCms
 
 from .base import importer
 from .. import objects
@@ -396,6 +398,7 @@ class AepParser(RiffParser):
             "tdum": read_floats,
             "tduM": read_floats,
             "tdsb": lambda p, h, l: p.read_number(l),
+            "pprf": AepParser.read_pprf
         }
         self.prop_dimension = None
         self.prop_animated = False
@@ -403,6 +406,9 @@ class AepParser(RiffParser):
         self.prop_position = False
         self.prop_gradient = False
         self.frame_mult = 1
+
+    def read_pprf(self, header, length):
+        return ImageCms.ImageCmsProfile(io.BytesIO(self.read(length)))
 
     def read_tdb4(self, header, length):
         data = PropertyMeta.reader(self, header, length)
