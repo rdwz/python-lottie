@@ -169,9 +169,8 @@ class StructuredData:
 
 
 class StructuredReader:
-    def __init__(self, parser, length, structure, cls=StructuredData):
-        self.value = cls()
-        self.structure = structure
+    def __init__(self, parser, length):
+        self.value = StructuredData()
         self.index = 0
         self.parser = parser
         self.length = length
@@ -193,13 +192,8 @@ class StructuredReader:
     def read_attribute(self, name, size, type):
         self.set_attribute(name, self.read_value(size, type))
 
-    def read_structure(self):
-        for name, size, type in self.structure:
-            self.read_attribute(name, size, type)
-
-        self.finalize()
-
-        return self.value
+    def read_attribute_array(self, name, count, length, type):
+        self.set_attribute(name, self.read_array(count, length, type))
 
     def finalize(self):
         if self.to_read:
@@ -214,6 +208,12 @@ class StructuredReader:
                 break
             read += byte
         return read.decode("utf8")
+
+    def read_array(self, count, length, type):
+        value = []
+        for i in range(count):
+            value.append(self.read_value(length, type))
+        return value
 
     def read_value(self, length, type):
         if isinstance(type, list):
@@ -236,6 +236,8 @@ class StructuredReader:
             return data.decode("utf8")
         elif type is float:
             return self.parser.endian.decode_float64(data)
+        else:
+            raise TypeError("Unknown value type %s" % type)
 
 
     def attr_bit(self, name, byte, bit):
@@ -370,7 +372,7 @@ class AepParser(RiffParser):
         return ImageCms.ImageCmsProfile(io.BytesIO(self.read(length)))
 
     def read_tdb4(self, length):
-        reader = StructuredReader(self, length, None)
+        reader = StructuredReader(self, length)
         reader.skip(3)
         reader.read_attribute("components", 1, int)
         reader.read_attribute("attrs", 2, bytes)
@@ -391,11 +393,13 @@ class AepParser(RiffParser):
         if dim is None or length < dim * 8:
             return self.read(length)
 
-        value = StructuredReader(self, length, [("value", 0, [("", 8, float)] * dim)])
-        return value.read_structure()
+        value = StructuredReader(self, length)
+        value.read_attribute_array("value", dim, 8, float)
+        value.finalize()
+        return value.value
 
     def read_cdta(self, length):
-        reader = StructuredReader(self, length, None)
+        reader = StructuredReader(self, length)
 
         reader.skip(13)
         reader.read_attribute("comp_start", 2, int)
@@ -408,11 +412,7 @@ class AepParser(RiffParser):
         reader.skip(6)
         reader.read_attribute("comp_duration", 2, int)
         reader.skip(5)
-        reader.read_attribute("color", 3, [
-            ("", 1, int),
-            ("", 1, int),
-            ("", 1, int),
-        ])
+        reader.read_attribute_array("color", 3, 1, int)
         reader.skip(85)
         reader.read_attribute("width", 2, int)
         reader.read_attribute("height", 2, int)
@@ -423,7 +423,7 @@ class AepParser(RiffParser):
         return reader.value
 
     def read_ldta(self, length):
-        reader = StructuredReader(self, length, None)
+        reader = StructuredReader(self, length)
         reader.skip(4)
         reader.read_attribute("quality", 2, int)
         reader.skip(15)
@@ -447,7 +447,7 @@ class AepParser(RiffParser):
 
 
     def read_idta(self, length):
-        reader = StructuredReader(self, length, None)
+        reader = StructuredReader(self, length)
 
         reader.read_attribute("type", 2, int)
         reader.skip(14)
@@ -471,7 +471,7 @@ class AepParser(RiffParser):
 
         self.prop_animated = False
 
-        reader = StructuredReader(self, length, None)
+        reader = StructuredReader(self, length)
         value = reader.value
         value.keyframes = []
         size = (6 + 3 * self.prop_dimension) if self.prop_position else (4 + self.prop_dimension)
@@ -486,13 +486,13 @@ class AepParser(RiffParser):
             reader.read_attribute("time", 2, int)
             reader.skip(5)
             if self.prop_position:
-                reader.read_attribute("", 0, [("", 8, float)] * 6)
-                reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
-                reader.read_attribute("pos_tan_in", 0, [("", 8, float)] * self.prop_dimension)
-                reader.read_attribute("pos_tan_out", 0, [("", 8, float)] * self.prop_dimension)
+                reader.read_attribute_array("", 6, 8, float)
+                reader.read_attribute_array("value", self.prop_dimension, 8, float)
+                reader.read_attribute_array("pos_tan_in", self.prop_dimension, 8, float)
+                reader.read_attribute_array("pos_tan_out", self.prop_dimension, 8, float)
             else:
-                reader.read_attribute("value", 0, [("", 8, float)] * self.prop_dimension)
-                reader.read_attribute("", 0, [("", 8, float)] * 3)
+                reader.read_attribute_array("value", self.prop_dimension, 8, float)
+                reader.read_attribute_array("", 3, 8, float)
                 reader.read_attribute("o_x", 8, float)
             value.keyframes.append(reader.value)
 
