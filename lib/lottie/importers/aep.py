@@ -151,7 +151,6 @@ class RiffParser:
     def on_list_start(self, type):
         pass
 
-
     def read_sub_chunks(self, length):
         end = self.file.tell() + length
         children = []
@@ -238,7 +237,6 @@ class StructuredReader:
             return self.parser.endian.decode_float64(data)
         else:
             raise TypeError("Unknown value type %s" % type)
-
 
     def attr_bit(self, name, byte, bit):
         setattr(self.value, name, (self.value.attrs[byte] & (1 << bit)) != 0)
@@ -342,7 +340,6 @@ class AepParser(RiffParser):
             "fiop": AepParser.read_number,
             "foac": AepParser.read_number,
             "fiac": AepParser.read_number,
-            "fvdv": AepParser.read_number,
             "wsnm": AepParser.read_utf16,
             "fcid": AepParser.read_number,
             "fovc": AepParser.read_number,
@@ -378,6 +375,7 @@ class AepParser(RiffParser):
         reader.read_attribute("attrs", 2, bytes)
         reader.finalize()
         reader.attr_bit("position", 1, 3)
+        reader.attr_bit("static", 1, 0)
         data = reader.value
 
         self.prop_dimension = data.components
@@ -395,6 +393,8 @@ class AepParser(RiffParser):
 
         value = StructuredReader(self, length)
         value.read_attribute_array("value", dim, 8, float)
+        if value.to_read % 8 == 0:
+            value.read_attribute_array("", value.to_read // 8, 8, float)
         value.finalize()
         return value.value
 
@@ -445,7 +445,6 @@ class AepParser(RiffParser):
 
         return reader.value
 
-
     def read_idta(self, length):
         reader = StructuredReader(self, length)
 
@@ -466,7 +465,7 @@ class AepParser(RiffParser):
         return reader.value
 
     def read_ldat(self, length):
-        if not self.prop_animated or self.prop_gradient:
+        if not self.prop_animated:
             return self.read(length)
 
         self.prop_animated = False
@@ -474,7 +473,14 @@ class AepParser(RiffParser):
         reader = StructuredReader(self, length)
         value = reader.value
         value.keyframes = []
-        size = (6 + 3 * self.prop_dimension) if self.prop_position else (4 + self.prop_dimension)
+        size = 0
+        if self.prop_position:
+            size = 6 + 3 * self.prop_dimension
+        elif self.prop_gradient:
+            size = 7
+        else:
+            size = 4 + self.prop_dimension
+
         while reader.to_read >= 8 + size * 8:
             reader.value = StructuredData()
             reader.read_attribute("attrs", 1, bytes)
@@ -486,10 +492,15 @@ class AepParser(RiffParser):
             reader.read_attribute("time", 2, int)
             reader.skip(5)
             if self.prop_position:
-                reader.read_attribute_array("", 6, 8, float)
+                reader.skip(8)
+                reader.read_attribute_array("", 5, 8, float)
                 reader.read_attribute_array("value", self.prop_dimension, 8, float)
                 reader.read_attribute_array("pos_tan_in", self.prop_dimension, 8, float)
                 reader.read_attribute_array("pos_tan_out", self.prop_dimension, 8, float)
+            elif self.prop_gradient:
+                reader.skip(8)
+                reader.read_attribute_array("", 5, 8, float)
+                reader.skip(8)
             else:
                 reader.read_attribute_array("value", self.prop_dimension, 8, float)
                 reader.read_attribute_array("", 3, 8, float)
