@@ -160,7 +160,8 @@ class RiffParser:
 
 
 class StructuredData:
-    pass
+    def __init__(self):
+        self.raw_bytes = b''
 
 
 class StructuredReader:
@@ -192,11 +193,16 @@ class StructuredReader:
 
     def finalize(self):
         if self.to_read:
-            setattr(self.value, "_%s" % self.index, self.parser.read(self.to_read))
+            self.skip(self.to_read)
+
+    def read_raw(self, length):
+        raw = self.parser.read(length)
+        self.to_read -= length
+        self.value.raw_bytes += raw
+        return raw
 
     def read_string0(self, length):
-        read = self.parser.read(length).rstrip(b"\0")
-        self.to_read -= length
+        read = self.read_raw(length).rstrip(b"\0")
         return read.decode("utf8")
 
     def read_array(self, count, length, type):
@@ -215,8 +221,7 @@ class StructuredReader:
         if length > self.to_read:
             raise Exception("Not enough data in chunk")
 
-        data = self.parser.read(length)
-        self.to_read -= length
+        data = self.read_raw(length)
 
         if type is bytes:
             return data
@@ -378,6 +383,7 @@ class AepParser(RiffParser):
             "idta": AepParser.read_idta,
             "tdb4": AepParser.read_tdb4,
             "cdat": AepParser.read_cdat,
+            "lhd3": AepParser.read_lhd3,
             "ldat": AepParser.read_ldat,
             "tdum": read_floats,
             "tduM": read_floats,
@@ -411,14 +417,19 @@ class AepParser(RiffParser):
         self.prop_shape = False
         self.prop_position = False
         self.prop_gradient = False
+        self.ldat_size = 0
         self.frame_mult = 1
 
     def read_shph(self, length):
         reader = StructuredReader(self, length)
-        reader.skip(4)
-        reader.read_attribute_array("values", 4, 4, float)
+        reader.skip(3)
+        reader.read_attribute("attrs", 1, bytes)
+        # Relative to the layer position
+        reader.read_attribute_array("top_left", 2, 4, float)
+        reader.read_attribute_array("bottom_right", 2, 4, float)
         reader.skip(4)
         reader.finalize()
+        reader.attr_bit("open", 0, 3)
         self.prop_shape = True
         return reader.value
 
@@ -535,57 +546,92 @@ class AepParser(RiffParser):
 
         return reader.value
 
-    def read_ldat(self, length):
-        #if self.prop_shape:
-            #reader = StructuredReader(self, length)
-            #skip = 0
-            #reader.skip(skip)
-            #reader.read_attribute_array("", (length - skip) // 8, 8, float)
-            #reader.finalize()
-            #return reader.value
-
-        if not self.prop_animated:
-            return self.read(length)
-
-        self.prop_animated = False
-
+    def read_lhd3(self, length):
         reader = StructuredReader(self, length)
-        value = reader.value
-        value.keyframes = []
-        size = 0
-        if self.prop_position:
-            size = 6 + 3 * self.prop_dimension
-        elif self.prop_gradient:
-            size = 7
-        else:
-            size = 5 * self.prop_dimension
-
-        while reader.to_read >= 8 + size * 8:
-            reader.value = StructuredData()
-            reader.read_attribute("attrs", 1, bytes)
-
-            reader.read_attribute("time", 2, int)
-            reader.skip(5)
-            if self.prop_position:
-                reader.skip(8)
-                reader.read_attribute_array("", 5, 8, float)
-                reader.read_attribute_array("value", self.prop_dimension, 8, float)
-                reader.read_attribute_array("pos_tan_in", self.prop_dimension, 8, float)
-                reader.read_attribute_array("pos_tan_out", self.prop_dimension, 8, float)
-            elif self.prop_gradient:
-                reader.skip(8)
-                reader.read_attribute_array("", 5, 8, float)
-                reader.skip(8)
-            else:
-                reader.read_attribute_array("value", self.prop_dimension, 8, float)
-                reader.read_attribute_array("", self.prop_dimension, 8, float)
-                reader.read_attribute_array("", self.prop_dimension, 8, float)
-                reader.read_attribute_array("", self.prop_dimension, 8, float)
-                reader.read_attribute_array("", self.prop_dimension, 8, float)
-            value.keyframes.append(reader.value)
-
-        reader.value = value
+        reader.skip(10)
+        reader.read_attribute("count", 2, int)
+        self.ldat_size = reader.value.count
         reader.finalize()
+        return reader.value
+
+    def read_ldat_item_bezier(self, length):
+        reader = StructuredReader(self, length)
+        reader.read_attribute_array("vertex", 2, 4, float)
+        reader.read_attribute_array("tan_out", 2, 4, float)
+        reader.read_attribute_array("tan_in", 2, 4, float)
+        reader.finalize()
+        return reader.value
+
+    def read_ldat_keyframe_common(self, length):
+        reader = StructuredReader(self, length)
+        reader.read_attribute("attrs", 1, bytes)
+        reader.read_attribute("time", 2, int)
+        reader.skip(5)
+        return reader
+
+    def read_ldat_keyframe_position(self, length):
+        reader = self.read_ldat_keyframe_common(length)
+        reader.skip(8)
+        reader.read_attribute_array("", 5, 8, float)
+        reader.read_attribute_array("value", self.prop_dimension, 8, float)
+        reader.read_attribute_array("pos_tan_in", self.prop_dimension, 8, float)
+        reader.read_attribute_array("pos_tan_out", self.prop_dimension, 8, float)
+        reader.finalize()
+        return reader.value
+
+    def read_ldat_keyframe_gradient(self, length):
+        reader = self.read_ldat_keyframe_common(length)
+        reader.skip(8)
+        reader.read_attribute_array("", 5, 8, float)
+        reader.skip(8)
+        reader.finalize()
+        return reader.value
+
+    def read_ldat_keyframe(self, length):
+        reader = self.read_ldat_keyframe_common(length)
+        reader.read_attribute_array("value", self.prop_dimension, 8, float)
+        reader.read_attribute_array("", self.prop_dimension, 8, float)
+        reader.read_attribute_array("", self.prop_dimension, 8, float)
+        reader.read_attribute_array("", self.prop_dimension, 8, float)
+        reader.read_attribute_array("", self.prop_dimension, 8, float)
+        reader.finalize()
+        return reader.value
+
+    def read_ldat(self, length):
+        item_func = None
+        group = 1
+        array_name = "keyframes"
+
+        if self.prop_shape:
+            item_func = self.read_ldat_item_bezier
+            group = 3
+            self.prop_shape = False
+            array_name = "segments"
+        elif not self.prop_animated:
+            return self.read(length)
+        elif self.prop_position:
+            item_func = self.read_ldat_keyframe_position
+            self.prop_animated = False
+        elif self.prop_gradient:
+            item_func = self.read_ldat_keyframe_gradient
+            self.prop_animated = False
+        else:
+            item_func = self.read_ldat_keyframe
+            self.prop_animated = False
+
+        item_count = self.ldat_size // group
+        item_size = length // item_count
+        leftover = length % item_count
+        value = StructuredData()
+        items = []
+
+        for i in range(item_count):
+            items.append(item_func(item_size))
+
+        setattr(value, array_name, items)
+
+        if leftover:
+            value._leftover = self.read(leftover)
 
         return value
 
