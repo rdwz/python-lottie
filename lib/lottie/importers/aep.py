@@ -160,11 +160,7 @@ class RiffParser:
 
 
 class StructuredData:
-    @classmethod
-    def reader(cls, parser, length):
-        reader = StructuredReader(parser, length, cls.structure, cls)
-        reader.read_structure()
-        return reader.value
+    pass
 
 
 class StructuredReader:
@@ -178,8 +174,8 @@ class StructuredReader:
     def skip(self, byte_count):
         self.read_attribute("", byte_count, bytes)
 
-    def read_attribute_string0(self, name):
-        self.set_attribute(name, self.read_string0())
+    def read_attribute_string0(self, name, length):
+        self.set_attribute(name, self.read_string0(length))
 
     def set_attribute(self, name, value):
         if name == "":
@@ -198,14 +194,9 @@ class StructuredReader:
         if self.to_read:
             setattr(self.value, "_%s" % self.index, self.parser.read(self.to_read))
 
-    def read_string0(self):
-        read = b''
-        while self.to_read > 0:
-            byte = self.parser.read(1)
-            self.to_read -= 1
-            if byte == b'\0':
-                break
-            read += byte
+    def read_string0(self, length):
+        read = self.parser.read(length).rstrip(b"\0")
+        self.to_read -= length
         return read.decode("utf8")
 
     def read_array(self, count, length, type):
@@ -234,7 +225,12 @@ class StructuredReader:
         elif type is str:
             return data.decode("utf8")
         elif type is float:
-            return self.parser.endian.decode_float64(data)
+            if length == 8:
+                return self.parser.endian.decode_float64(data)
+            elif length == 4:
+                return self.parser.endian.decode_float32(data)
+            else:
+                TypeError("Wrong size for float: %s" % length)
         else:
             raise TypeError("Unknown value type %s" % type)
 
@@ -285,40 +281,80 @@ def convert_value_color(arr):
 class AepParser(RiffParser):
     placeholder = "-_0_/-"
     shapes = {
-        "ADBE Vector Filter - Trim": objects.shapes.Trim,
-        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
-        "ADBE Vector Graphic - Fill": objects.shapes.Fill,
         "ADBE Vector Group": objects.shapes.Group,
+
         "ADBE Vector Shape - Group": objects.shapes.Path,
         "ADBE Vector Shape - Rect": objects.shapes.Rect,
-        "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
-        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
         "ADBE Vector Shape - Star": objects.shapes.Star,
+        "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
+
+        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
+        "ADBE Vector Graphic - Fill": objects.shapes.Fill,
+        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
+        "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
+
+        "ADBE Vector Filter - Merge": objects.shapes.Merge,
+        "ADBE Vector Filter - Offset": objects.shapes.OffsetPath,
+        "ADBE Vector Filter - PB": objects.shapes.PuckerBloat,
+        "ADBE Vector Filter - Repeater": objects.shapes.Repeater,
+        "ADBE Vector Filter - RC": objects.shapes.RoundedCorners,
+        "ADBE Vector Filter - Trim": objects.shapes.Trim,
+        "ADBE Vector Filter - Twist": objects.shapes.Twist,
+        "ADBE Vector Filter - Zigzag": objects.shapes.ZigZag,
     }
     properties = {
         #"ADBE Vector Shape": ("shape", None)
-        "ADBE Vector Position": ("position", None),
+        "ADBE Vector Rect Roundness": ("direction", objects.shapes.ShapeDirection),
         "ADBE Vector Rect Size": ("size", None),
+        "ADBE Vector Rect Position": ("position", None),
         "ADBE Vector Ellipse Size": ("size", None),
+        "ADBE Vector Ellipse Position": ("position", None),
+
         "ADBE Vector Star Type": ("star_type", objects.shapes.StarType),
         "ADBE Vector Star Points": ("points", None),
+        "ADBE Vector Star Position": ("position", None),
         "ADBE Vector Star Inner Radius": ("inner_radius", None),
         "ADBE Vector Star Outer Radius": ("outer_radius", None),
         "ADBE Vector Star Inner Roundess": ("inner_roundness", None),
+        "ADBE Vector Star Outer Roundess": ("outer_roundness", None),
+        "ADBE Vector Star Rotation": ("rotation", None),
+
+        "ADBE Vector Fill Color": ("color", convert_value_color),
 
         "ADBE Vector Stroke Color": ("color", convert_value_color),
-        "ADBE Vector Fill Color": ("color", convert_value_color),
         "ADBE Vector Stroke Width": ("width", None),
         "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
         "ADBE Vector Stroke Line Cap": ("line_cap", objects.shapes.LineCap),
         "ADBE Vector Stroke Line Join": ("line_join", objects.shapes.LineJoin),
+
         "ADBE Vector Grad Start Pt": ("start_point", None),
         "ADBE Vector Grad End Pt": ("end_point", None),
         "ADBE Vector Grad Colors": ("colors", None),
 
+        "ADBE Vector Merge Type": ("merge_mode", objects.shapes.MergeMode),
+
+        "ADBE Vector Offset Amount": ("amount", None),
+        "ADBE Vector Offset Line Join": ("line_join", objects.shapes.LineJoin),
+        "ADBE Vector Offset Miter Limit": ("miter_limit", None),
+
+        "ADBE Vector PuckerBloat Amount": ("amount", None),
+
+        #"ADBE Vector Repeater Transform": ??
+        "ADBE Vector Repeater Copies": ("copies", None),
+        "ADBE Vector Repeater Offset": ("offset", None),
+        "ADBE Vector Repeater Order": ("composite", objects.shapes.Composite),
+
+        "ADBE Vector RoundCorner Radius": ("radius", None),
+
         "ADBE Vector Trim Start": ("start", None),
         "ADBE Vector Trim End": ("end", None),
         "ADBE Vector Trim Offset": ("offset", None),
+
+        "ADBE Vector Twist Angle": ("angle", None),
+        "ADBE Vector Twist Center": ("center", None),
+
+        "ADBE Vector Zigzag Size": ("amplitude", None),
+        "ADBE Vector Zigzag Detail": ("frequency", None),
 
         "ADBE Anchor Point": ("anchor_point", None),
         "ADBE Position": ("position", None),
@@ -368,6 +404,7 @@ class AepParser(RiffParser):
             "CcCt": AepParser.read_number,
             "mrid": AepParser.read_number,
             "numS": AepParser.read_number,
+            "shph": AepParser.read_shph,
         }
         self.prop_dimension = None
         self.prop_animated = False
@@ -375,6 +412,15 @@ class AepParser(RiffParser):
         self.prop_position = False
         self.prop_gradient = False
         self.frame_mult = 1
+
+    def read_shph(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(4)
+        reader.read_attribute_array("values", 4, 4, float)
+        reader.skip(4)
+        reader.finalize()
+        self.prop_shape = True
+        return reader.value
 
     def read_mn(self, length):
         return self.read(length).strip(b"\0").decode("utf8")
@@ -438,17 +484,28 @@ class AepParser(RiffParser):
 
     def read_ldta(self, length):
         reader = StructuredReader(self, length)
-        reader.skip(4)
+        # 0
+        reader.read_attribute("layer_id", 4, int)
+        # 4
         reader.read_attribute("quality", 2, int)
+        # 6
         reader.skip(15)
+        # 21
         reader.read_attribute("start_frame", 2, int)
+        # 23
         reader.skip(6)
+        # 29
         reader.read_attribute("end_frame", 2, int)
+        # 31
         reader.skip(6)
+        # 37
         reader.read_attribute("attrs", 3, bytes)
+        # 40
         reader.read_attribute("source_id", 4, int)
+        # 44
         reader.skip(20)
-        reader.read_attribute_string0("name")
+        # 64
+        reader.read_attribute_string0("name", 32)
 
         reader.finalize()
 
@@ -479,6 +536,14 @@ class AepParser(RiffParser):
         return reader.value
 
     def read_ldat(self, length):
+        #if self.prop_shape:
+            #reader = StructuredReader(self, length)
+            #skip = 0
+            #reader.skip(skip)
+            #reader.read_attribute_array("", (length - skip) // 8, 8, float)
+            #reader.finalize()
+            #return reader.value
+
         if not self.prop_animated:
             return self.read(length)
 
@@ -525,9 +590,7 @@ class AepParser(RiffParser):
         return value
 
     def on_chunk(self, chunk):
-        if chunk.header == "shph":
-            self.prop_shape = True
-        elif chunk.header == "lhd3":
+        if chunk.header == "lhd3":
             self.prop_animated = not self.prop_shape
         elif chunk.header == "LIST" and chunk.data.type == "GCst":
             self.prop_gradient = False
