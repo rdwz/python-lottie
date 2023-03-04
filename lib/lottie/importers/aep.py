@@ -18,6 +18,14 @@ class Endianness:
     def decode(self, data):
         raise NotImplementedError()
 
+    def decode_2comp(self, data):
+        uint = self.decode(data)
+        sbit = 1 << (len(data) * 8 - 1)
+        if uint & sbit:
+            return uint - (sbit << 1)
+        else:
+            return uint
+
 
 class BigEndian(Endianness):
     @staticmethod
@@ -86,6 +94,8 @@ class RiffList:
                     break
 
         return found
+
+sint = object()
 
 
 @dataclass
@@ -247,6 +257,8 @@ class StructuredReader:
             return data
         elif type is int:
             return self.parser.endian.decode(data)
+        elif type is sint:
+            return self.parser.endian.decode_2comp(data)
         elif type is str:
             return data.decode("utf8")
         elif type is float:
@@ -303,12 +315,12 @@ class PropertyPolicyMultidim:
 
     def static(self, cdat):
         if len(cdat.data.value) == 1:
-            return self.converter(cdat.data.value)[0]
+            return self.converter(NVector(*cdat.data.value))[0]
         else:
-            return self.converter(cdat.data.value)
+            return self.converter(NVector(*cdat.data.value))
 
     def keyframe(self, keyframe, index):
-        return self.convert(NVector(*keyframe.value))
+        return self.converter(NVector(*keyframe.value))
 
 
 class PropertyPolicyPrepared:
@@ -345,7 +357,7 @@ class AepParser(RiffParser):
         "ADBE Vector Graphic - Stroke": shape_with_defaults(
             objects.shapes.Stroke,
             width=2,
-            color=Color(0, 0, 0),
+            color=Color(1, 1, 1),
         ),
         "ADBE Vector Graphic - Fill": shape_with_defaults(
             objects.shapes.Fill,
@@ -365,7 +377,8 @@ class AepParser(RiffParser):
     }
     properties = {
         "ADBE Vector Shape": ("shape", None),
-        "ADBE Vector Rect Roundness": ("direction", objects.shapes.ShapeDirection),
+        "ADBE Vector Shape Direction": ("direction", objects.shapes.ShapeDirection),
+        "ADBE Vector Rect Roundness": ("rounded", None),
         "ADBE Vector Rect Size": ("size", None),
         "ADBE Vector Rect Position": ("position", None),
         "ADBE Vector Ellipse Size": ("size", None),
@@ -472,7 +485,8 @@ class AepParser(RiffParser):
         self.list_type = ListType.Other
         self.keyframe_type = KeyframeType.MultiDimensional
         self.ldat_size = 0
-        self.frame_mult = 1
+        self.time_mult = 1
+        self.time_offset = 0
 
     def read_shph(self, length):
         reader = StructuredReader(self, length)
@@ -553,13 +567,15 @@ class AepParser(RiffParser):
         # 4
         reader.read_attribute("quality", 2, int)
         # 6
-        reader.skip(15)
+        reader.skip(7)
+        reader.read_attribute("start_time", 2, sint)
+        reader.skip(6)
         # 21
-        reader.read_attribute("start_time", 2, int)
+        reader.read_attribute("in_time", 2, int)
         # 23
         reader.skip(6)
         # 29
-        reader.read_attribute("end_time", 2, int)
+        reader.read_attribute("out_time", 2, int)
         # 31
         reader.skip(6)
         # 37
@@ -577,6 +593,7 @@ class AepParser(RiffParser):
         reader.attr_bit("motion_blur", 2, 3)
         reader.attr_bit("effects", 2, 2)
         reader.attr_bit("locked", 2, 5)
+        reader.attr_bit("visible", 2, 0)
 
         return reader.value
 
@@ -720,14 +737,15 @@ class AepParser(RiffParser):
             # Match name
             if item.header == "tdmn":
                 match_name = item.data
-            # Hidden (?)
-            elif item.header == "tdsb":
-                object.hidden = (item.data & 1) == 0
             # Name
             elif item.header == "tdsn" and len(item.data.children) > 0:
                 name = item.data.children[0]
                 if name.header == "Utf8" and name.data != self.placeholder:
                     object.name = name.data
+            # Shape hidden
+            elif item.header == "tdsb":
+                if (item.data & 1) == 0:
+                    object.hidden = True
             # Name (for layer/comp)
             elif item.header == "Utf8" and item.data != self.placeholder:
                 object.name = item.data
@@ -801,12 +819,15 @@ class AepParser(RiffParser):
             # TODO should convert expressions the same way that bodymovin does
             prop.expression = expr.data
 
+    def time(self, value):
+        return (value + self.time_offset) * self.time_mult
+
     def set_property_keyframes(self, prop, policy, chunk):
         ldat = chunk.data.find("ldat")
         if ldat and hasattr(ldat.data, "keyframes"):
             for index, keyframe in enumerate(ldat.data.keyframes):
                 if keyframe.attrs == b'\0':
-                    prop.add_keyframe(keyframe.time * self.frame_mult, policy.keyframe(keyframe.value, index))
+                    prop.add_keyframe(self.time(keyframe.time), policy.keyframe(keyframe, index))
 
         if len(prop.keyframes) == 1:
             prop.clear_animation(prop.keyframes[0].start)
@@ -866,10 +887,12 @@ class AepParser(RiffParser):
             if item.header == "Utf8":
                 lottie_obj.name = item.data
             elif item.header == "ldta":
-                lottie_obj.in_point = item.data.start_time * self.frame_mult
-                lottie_obj.out_point = 60
-                lottie_obj.out_point = item.data.end_time * self.frame_mult
+                self.time_offset = item.data.start_time
+                lottie_obj.start_time = self.time_offset
+                lottie_obj.in_point = self.time(item.data.in_time)
+                lottie_obj.out_point = self.time(item.data.out_time)
                 lottie_obj.threedimensional = item.data.ddd
+                lottie_obj.hidden = not item.data.visible
             elif item.header == "LIST":
                 self.read_properties(lottie_obj, item)
 
@@ -889,12 +912,13 @@ class AepParser(RiffParser):
                 anim.width = item.data.width
                 anim.height = item.data.height
                 anim.frame_rate = item.data.frame_rate
-                self.frame_mult = 0.5
-                anim.in_point = item.data.start_time * self.frame_mult
+                self.time_mult = 1 / item.data.time_scale
+                self.time_offset = 0
+                anim.in_point = self.time(item.data.start_time)
                 if item.data.end_time == 0xffff:
-                    anim.out_point = item.data.comp_duration * self.frame_mult
+                    anim.out_point = self.time(item.data.comp_duration)
                 else:
-                    anim.out_point = item.data.end_time * self.frame_mult
+                    anim.out_point = self.time(item.data.end_time)
             elif item.header == "LIST" and item.data.type == "Layr":
                 anim.layers.append(self.chunk_to_layer(item))
 
