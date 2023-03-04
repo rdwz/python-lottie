@@ -524,14 +524,14 @@ class AepParser(RiffParser):
     def read_cdta(self, length):
         reader = StructuredReader(self, length)
 
-        reader.skip(13)
-        reader.read_attribute("comp_start", 2, int)
+        reader.skip(5)
+        reader.read_attribute("time_scale", 2, int)
+        reader.skip(14)
+        reader.read_attribute("playhead", 2, int)
         reader.skip(6)
-        reader.read_attribute("playhead_position", 2, int)
+        reader.read_attribute("start_time", 2, int)
         reader.skip(6)
-        reader.read_attribute("start_frame", 2, int)
-        reader.skip(6)
-        reader.read_attribute("end_frame", 2, int)
+        reader.read_attribute("end_time", 2, int)
         reader.skip(6)
         reader.read_attribute("comp_duration", 2, int)
         reader.skip(5)
@@ -541,6 +541,7 @@ class AepParser(RiffParser):
         reader.read_attribute("height", 2, int)
         reader.skip(12)
         reader.read_attribute("frame_rate", 2, int)
+
 
         reader.finalize()
         return reader.value
@@ -554,11 +555,11 @@ class AepParser(RiffParser):
         # 6
         reader.skip(15)
         # 21
-        reader.read_attribute("start_frame", 2, int)
+        reader.read_attribute("start_time", 2, int)
         # 23
         reader.skip(6)
         # 29
-        reader.read_attribute("end_frame", 2, int)
+        reader.read_attribute("end_time", 2, int)
         # 31
         reader.skip(6)
         # 37
@@ -865,9 +866,9 @@ class AepParser(RiffParser):
             if item.header == "Utf8":
                 lottie_obj.name = item.data
             elif item.header == "ldta":
-                lottie_obj.in_point = item.data.start_frame * self.frame_mult
+                lottie_obj.in_point = item.data.start_time * self.frame_mult
                 lottie_obj.out_point = 60
-                # lottie_obj.out_point = item.data.end_frame * self.frame_mult
+                lottie_obj.out_point = item.data.end_time * self.frame_mult
                 lottie_obj.threedimensional = item.data.ddd
             elif item.header == "LIST":
                 self.read_properties(lottie_obj, item)
@@ -888,9 +889,12 @@ class AepParser(RiffParser):
                 anim.width = item.data.width
                 anim.height = item.data.height
                 anim.frame_rate = item.data.frame_rate
-                self.frame_mult = item.data.frame_rate / 100
-                anim.in_point = item.data.start_frame * self.frame_mult
-                # anim.out_point = item.data.end_frame * self.frame_mult
+                self.frame_mult = 0.5
+                anim.in_point = item.data.start_time * self.frame_mult
+                if item.data.end_time == 0xffff:
+                    anim.out_point = item.data.comp_duration * self.frame_mult
+                else:
+                    anim.out_point = item.data.end_time * self.frame_mult
             elif item.header == "LIST" and item.data.type == "Layr":
                 anim.layers.append(self.chunk_to_layer(item))
 
