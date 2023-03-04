@@ -3,6 +3,7 @@ from xml.etree import ElementTree
 from dataclasses import dataclass
 import struct
 from PIL import ImageCms
+import enum
 
 from .base import importer
 from .. import objects
@@ -65,11 +66,26 @@ class RiffList:
         for ch in self.children:
             if ch.header == header:
                 return ch
+            elif ch.header == "LIST" and ch.data.type == header:
+                return ch
 
     def find_list(self, type):
         for ch in self.children:
             if ch.header == "LIST" and ch.data.type == type:
                 return ch
+
+    def find_multiple(self, *headers):
+        found = [None] * len(headers)
+        for ch in self.children:
+            for i, header in enumerate(headers):
+                if ch.header == header:
+                    found[i] = ch
+                    break
+                elif ch.header == "LIST" and ch.data.type == header:
+                    found[i] = ch
+                    break
+
+        return found
 
 
 @dataclass
@@ -120,6 +136,7 @@ class RiffParser:
             while self.file.tell() < end:
                 children.append(self.read_chunk())
             data = RiffList(type, tuple(children))
+            self.on_list_end(type)
         elif header in self.chunk_parsers:
             data = self.chunk_parsers[header](self, length)
         else:
@@ -149,6 +166,9 @@ class RiffParser:
         pass
 
     def on_list_start(self, type):
+        pass
+
+    def on_list_end(self, type):
         pass
 
     def read_sub_chunks(self, length):
@@ -261,26 +281,55 @@ def read_floats(parser, length):
     return floats
 
 
-def read_floats32(parser, length):
-    if length < 4:
-        return parser.read(length)
-
-    if length == 4:
-        return parser.endian.decode_float64(parser.read(8))
-
-    floats = {}
-    to_read = length
-    while to_read >= 4:
-        floats["_%s" % len(floats)] = parser.endian.decode_float32(parser.read(4))
-        to_read -= 4
-
-    if to_read:
-        floats["_%s" % len(floats)] = parser.read(to_read)
-    return floats
-
-
 def convert_value_color(arr):
     return Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)
+
+
+class ListType(enum.Enum):
+    Shape = enum.auto()
+    Keyframe = enum.auto()
+    Other = enum.auto()
+
+
+class KeyframeType(enum.Enum):
+    MultiDimensional = enum.auto()
+    Position = enum.auto()
+    NoValue = enum.auto()
+
+
+class PropertyPolicyMultidim:
+    def __init__(self, converter=lambda x: x):
+        self.converter = converter
+
+    def static(self, cdat):
+        if len(cdat.data.value) == 1:
+            return self.converter(cdat.data.value)[0]
+        else:
+            return self.converter(cdat.data.value)
+
+    def keyframe(self, keyframe, index):
+        return self.convert(NVector(*keyframe.value))
+
+
+class PropertyPolicyPrepared:
+    def __init__(self, values):
+        self.values = values
+
+    def static(self, cdat):
+        return self.values[0]
+
+    def keyframe(self, keyframe, index):
+        return self.values[index]
+
+
+def shape_with_defaults(cls, **defaults):
+    def callback():
+        obj = cls()
+        for k, v in defaults.items():
+            getattr(obj, k).value = v
+        return obj
+
+    return callback
 
 
 class AepParser(RiffParser):
@@ -293,8 +342,15 @@ class AepParser(RiffParser):
         "ADBE Vector Shape - Star": objects.shapes.Star,
         "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
 
-        "ADBE Vector Graphic - Stroke": objects.shapes.Stroke,
-        "ADBE Vector Graphic - Fill": objects.shapes.Fill,
+        "ADBE Vector Graphic - Stroke": shape_with_defaults(
+            objects.shapes.Stroke,
+            width=2,
+            color=Color(0, 0, 0),
+        ),
+        "ADBE Vector Graphic - Fill": shape_with_defaults(
+            objects.shapes.Fill,
+            color=Color(1, 0, 0)
+        ),
         "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
         "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
 
@@ -308,7 +364,7 @@ class AepParser(RiffParser):
         "ADBE Vector Filter - Zigzag": objects.shapes.ZigZag,
     }
     properties = {
-        #"ADBE Vector Shape": ("shape", None)
+        "ADBE Vector Shape": ("shape", None),
         "ADBE Vector Rect Roundness": ("direction", objects.shapes.ShapeDirection),
         "ADBE Vector Rect Size": ("size", None),
         "ADBE Vector Rect Position": ("position", None),
@@ -413,10 +469,8 @@ class AepParser(RiffParser):
             "shph": AepParser.read_shph,
         }
         self.prop_dimension = None
-        self.prop_animated = False
-        self.prop_shape = False
-        self.prop_position = False
-        self.prop_gradient = False
+        self.list_type = ListType.Other
+        self.keyframe_type = KeyframeType.MultiDimensional
         self.ldat_size = 0
         self.frame_mult = 1
 
@@ -430,7 +484,6 @@ class AepParser(RiffParser):
         reader.skip(4)
         reader.finalize()
         reader.attr_bit("open", 0, 3)
-        self.prop_shape = True
         return reader.value
 
     def read_mn(self, length):
@@ -450,9 +503,8 @@ class AepParser(RiffParser):
         data = reader.value
 
         self.prop_dimension = data.components
-        self.prop_animated = False
-        self.prop_shape = False
-        self.prop_position = data.position
+        if data.position:
+            self.keyframe_type = KeyframeType.Position
         return data
 
     def read_cdat(self, length):
@@ -590,34 +642,39 @@ class AepParser(RiffParser):
     def read_ldat_keyframe(self, length):
         reader = self.read_ldat_keyframe_common(length)
         reader.read_attribute_array("value", self.prop_dimension, 8, float)
-        reader.read_attribute_array("", self.prop_dimension, 8, float)
-        reader.read_attribute_array("", self.prop_dimension, 8, float)
-        reader.read_attribute_array("", self.prop_dimension, 8, float)
-        reader.read_attribute_array("", self.prop_dimension, 8, float)
+        if reader.to_read >= 4 * 8 * self.prop_dimension:
+            reader.read_attribute_array("", self.prop_dimension, 8, float)
+            reader.read_attribute_array("", self.prop_dimension, 8, float)
+            reader.read_attribute_array("", self.prop_dimension, 8, float)
+            reader.read_attribute_array("", self.prop_dimension, 8, float)
         reader.finalize()
         return reader.value
+
+    def read_ldat_item_raw(self, length):
+        return self.read(length)
 
     def read_ldat(self, length):
         item_func = None
         group = 1
-        array_name = "keyframes"
 
-        if self.prop_shape:
+        if self.list_type == ListType.Other:
+            item_func = self.read_ldat_item_raw
+            array_name = "items"
+        elif self.list_type == ListType.Shape:
             item_func = self.read_ldat_item_bezier
             group = 3
-            self.prop_shape = False
             array_name = "segments"
-        elif not self.prop_animated:
-            return self.read(length)
-        elif self.prop_position:
-            item_func = self.read_ldat_keyframe_position
-            self.prop_animated = False
-        elif self.prop_gradient:
-            item_func = self.read_ldat_keyframe_gradient
-            self.prop_animated = False
-        else:
-            item_func = self.read_ldat_keyframe
-            self.prop_animated = False
+        elif self.list_type == ListType.Keyframe:
+            array_name = "keyframes"
+
+            if self.keyframe_type == KeyframeType.Position:
+                item_func = self.read_ldat_keyframe_position
+            elif self.keyframe_type == KeyframeType.NoValue:
+                item_func = self.read_ldat_keyframe_gradient
+            else:
+                item_func = self.read_ldat_keyframe
+
+            self.keyframe_type = KeyframeType.MultiDimensional
 
         item_count = self.ldat_size // group
         item_size = length // item_count
@@ -635,31 +692,51 @@ class AepParser(RiffParser):
 
         return value
 
-    def on_chunk(self, chunk):
-        if chunk.header == "lhd3":
-            self.prop_animated = not self.prop_shape
-        elif chunk.header == "LIST" and chunk.data.type == "GCst":
-            self.prop_gradient = False
-
     def on_list_start(self, type):
         if type == "GCst":
-            self.prop_gradient = True
+            self.keyframe_type = KeyframeType.NoValue
+        elif type == "shap":
+            self.list_type = ListType.Shape
+        elif type == "tdbs":
+            self.list_type = ListType.Keyframe
+        elif type == "om-s":
+            self.keyframe_type = KeyframeType.NoValue
+
+    def on_list_end(self, type):
+        if type == "GCst":
+            self.keyframe_type = KeyframeType.MultiDimensional
+        elif type == "shap":
+            self.list_type = ListType.Other
+        elif type == "tdbs":
+            self.list_type = ListType.Other
+            self.keyframe_type = KeyframeType.MultiDimensional
+        elif type == "om-s":
+            self.keyframe_type = KeyframeType.MultiDimensional
 
     def read_properties(self, object, chunk):
         match_name = None
         for item in chunk.data.children:
+            # Match name
             if item.header == "tdmn":
                 match_name = item.data
+            # Hidden (?)
             elif item.header == "tdsb":
                 object.hidden = (item.data & 1) == 0
+            # Name
             elif item.header == "tdsn" and len(item.data.children) > 0:
                 name = item.data.children[0]
                 if name.header == "Utf8" and name.data != self.placeholder:
                     object.name = name.data
+            # Name (for layer/comp)
             elif item.header == "Utf8" and item.data != self.placeholder:
                 object.name = item.data
+            # MultiDimensional property
             elif item.header == "LIST" and item.data.type == "tdbs":
-                self.set_property(object, match_name, item)
+                self.parse_property_multidimensional(object, match_name, item)
+            # Shape property
+            elif item.header == "LIST" and item.data.type == "om-s":
+                self.parse_property_shape(object, match_name, item)
+            # Sub-object
             elif item.header == "LIST" and item.data.type == "tdgp":
                 if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
                     self.read_properties(object, item)
@@ -670,6 +747,7 @@ class AepParser(RiffParser):
                     object.add_shape(child)
                     child.match_name = match_name
                     self.read_properties(child, item)
+            # Gradients
             elif item.header == "LIST" and item.data.type == "GCst" and match_name == "ADBE Vector Grad Colors":
                 prop = object.colors.colors
                 for i, grad in enumerate(item.data.find_list("GCky").data.children):
@@ -694,49 +772,102 @@ class AepParser(RiffParser):
     def read_utf16(self, length):
         return self.read(length).decode("utf16")
 
-    def set_property(self, object, match_name, chunk):
+    def parse_property_multidimensional(self, object, match_name, chunk):
         meta = self.properties.get(match_name)
         if not meta:
             return
 
         prop_name, converter = meta
-        if converter is None:
-            converter = lambda x: x
+        policy = PropertyPolicyMultidim()
+        if converter is not None:
+            policy.converter = converter
 
-        prop = objects.MultiDimensional()
-        for item in chunk.data.children:
-            if item.header == "cdat":
-                if len(item.data.value) == 1:
-                    prop.value = converter(item.data.value[0])
-                else:
-                    prop.value = converter(NVector(*item.data.value))
-            elif item.header == "LIST" and item.data.type == "list":
-                self.set_property_keyframes(prop, converter, item)
-            elif item.header == "Utf8":
-                # TODO should convert expressions the same way that bodymovin does
-                prop.expression = item.data
+        prop = objects.properties.MultiDimensional()
+        self.parse_property_tbds(chunk, prop, policy)
 
         setattr(object, prop_name, prop)
 
-    def set_property_keyframes(self, prop, converter, chunk):
-        for item in chunk.data.children:
-            if item.header == "ldat" and hasattr(item.data, "keyframes"):
-                for keyframe in item.data.keyframes:
-                    if keyframe.attrs == b'\0':
-                        prop.add_keyframe(keyframe.time * self.frame_mult, converter(NVector(*keyframe.value)))
+    def parse_property_tbds(self, chunk, prop, policy):
+        static, kf, expr = chunk.data.find_multiple("cdat", "list", "Utf8")
+
+        if static:
+            prop.value = policy.static(static)
+
+        if kf:
+            self.set_property_keyframes(prop, policy, kf)
+
+        if expr:
+            # TODO should convert expressions the same way that bodymovin does
+            prop.expression = expr.data
+
+    def set_property_keyframes(self, prop, policy, chunk):
+        ldat = chunk.data.find("ldat")
+        if ldat and hasattr(ldat.data, "keyframes"):
+            for index, keyframe in enumerate(ldat.data.keyframes):
+                if keyframe.attrs == b'\0':
+                    prop.add_keyframe(keyframe.time * self.frame_mult, policy.keyframe(keyframe.value, index))
 
         if len(prop.keyframes) == 1:
             prop.clear_animation(prop.keyframes[0].start)
 
+    def parse_property_shape(self, object, match_name, chunk):
+        meta = self.properties.get(match_name)
+        if not meta:
+            return
+
+        prop_name = meta[0]
+
+        prop = objects.properties.ShapeProperty()
+
+        policy = PropertyPolicyPrepared([])
+        tbds, omks = chunk.data.find_multiple("tdbs", "omks")
+
+        self.parse_shape_omks(omks, policy)
+        self.parse_property_tbds(tbds, prop, policy)
+
+        setattr(object, prop_name, prop)
+
+    def parse_shape_omks(self, chunk, policy):
+        for item in chunk.data.children:
+            if item.header == "LIST" and item.data.type == "shap":
+                policy.values.append(self.parse_shape_shap(item))
+
+    def parse_shape_shap(self, chunk):
+        bez = objects.bezier.Bezier()
+        shph, list = chunk.data.find_multiple("shph", "list")
+
+        top_left = shph.data.top_left
+        bottom_right = shph.data.bottom_right
+        bez.closed = not shph.data.open
+
+        segments = list.data.find("ldat").data.segments
+        for i, seg in enumerate(segments):
+            vertex = self.absolute_bezier_point(top_left, bottom_right, seg.vertex)
+            bez.add_point(
+                vertex,
+                self.absolute_bezier_point(top_left, bottom_right, segments[(i-1) % len(segments)].tan_in) - vertex,
+                self.absolute_bezier_point(top_left, bottom_right, seg.tan_out) - vertex
+            )
+        return bez
+
+    def absolute_bezier_point(self, tl, br, p):
+        return NVector(
+            tl[0] * (1-p[0]) + br[0] * p[0],
+            tl[1] * (1-p[1]) + br[1] * p[1]
+        )
+
+
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
+        lottie_obj.transform.position.value = NVector(self.anim.width / 2, self.anim.height / 2)
 
         for item in chunk.data.children:
             if item.header == "Utf8":
                 lottie_obj.name = item.data
             elif item.header == "ldta":
                 lottie_obj.in_point = item.data.start_frame * self.frame_mult
-                lottie_obj.out_point = item.data.end_frame * self.frame_mult
+                lottie_obj.out_point = 60
+                # lottie_obj.out_point = item.data.end_frame * self.frame_mult
                 lottie_obj.threedimensional = item.data.ddd
             elif item.header == "LIST":
                 self.read_properties(lottie_obj, item)
@@ -745,6 +876,7 @@ class AepParser(RiffParser):
 
     def chunk_to_animation(self, fold):
         anim = objects.Animation()
+        self.anim = anim
         for chunk in fold.data.children:
             if chunk.header == "LIST" and chunk.data.type == "Item" and chunk.data.find("idta").data.type == 4:
                 break
@@ -758,7 +890,7 @@ class AepParser(RiffParser):
                 anim.frame_rate = item.data.frame_rate
                 self.frame_mult = item.data.frame_rate / 100
                 anim.in_point = item.data.start_frame * self.frame_mult
-                anim.out_point = item.data.end_frame * self.frame_mult
+                # anim.out_point = item.data.end_frame * self.frame_mult
             elif item.header == "LIST" and item.data.type == "Layr":
                 anim.layers.append(self.chunk_to_layer(item))
 
