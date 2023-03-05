@@ -403,6 +403,8 @@ class AepParser(RiffParser):
             "numS": AepParser.read_number,
             "shph": AepParser.read_shph,
             "otda": AepParser.read_otda,
+            "opti": AepParser.read_opti,
+            "sspc": AepParser.read_sspc,
         }
         self.prop_dimension = None
         self.list_type = ListType.Other
@@ -718,6 +720,26 @@ class AepParser(RiffParser):
         reader.read_attribute("x", 8, float)
         reader.read_attribute("y", 8, float)
         reader.read_attribute("z", 8, float)
+        reader.finalize()
+        return reader.value
+
+    def read_opti(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(10)
+        reader.read_attribute("a", 4, float)
+        reader.read_attribute("r", 4, float)
+        reader.read_attribute("g", 4, float)
+        reader.read_attribute("b", 4, float)
+        reader.read_attribute_string0("name", 256)
+        reader.finalize()
+        return reader.value
+
+    def read_sspc(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(32)
+        reader.read_attribute("width", 2, int)
+        reader.skip(2)
+        reader.read_attribute("height", 2, int)
         reader.finalize()
         return reader.value
 
