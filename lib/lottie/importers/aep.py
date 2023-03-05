@@ -96,6 +96,7 @@ class RiffList:
 
         return found
 
+
 sint = object()
 
 
@@ -133,6 +134,14 @@ class RiffParser:
 
     def read_number(self, length):
         return self.endian.read(self.file, length)
+
+    def read_float(self, length):
+        if length == 4:
+            return self.endian.decode_float32(self.read(4))
+        elif length == 8:
+            return self.endian.decode_float64(self.read(8))
+        else:
+            raise TypeError("Invalid float size %s" % length)
 
     def read_chunk(self):
         header = self.read_str(4)
@@ -188,6 +197,13 @@ class RiffParser:
         while self.file.tell() < end:
             children.append(self.read_chunk())
         return RiffList("", tuple(children))
+
+    def parse(self):
+        return RiffChunk(
+            "RIFX" if isinstance(self.endian, BigEndian) else "RIFF",
+            self.end,
+            RiffList("", tuple(self))
+        )
 
 
 class StructuredData:
@@ -277,24 +293,6 @@ class StructuredReader:
 
     def attr_bit(self, name, byte, bit):
         setattr(self.value, name, (self.value.attrs[byte] & (1 << bit)) != 0)
-
-
-def read_floats(parser, length):
-    if length < 8:
-        return parser.read(length)
-
-    if length == 8:
-        return parser.endian.decode_float64(parser.read(8))
-
-    floats = {}
-    to_read = length
-    while to_read >= 8:
-        floats["_%s" % len(floats)] = parser.endian.decode_float64(parser.read(8))
-        to_read -= 8
-
-    if to_read:
-        floats["_%s" % len(floats)] = parser.read(to_read)
-    return floats
 
 
 def convert_value_color(arr):
@@ -439,7 +437,6 @@ class AepParser(RiffParser):
         "ADBE Vector Repeater End Opacity": ("end_opacity", lambda v: v * 100),
         "ADBE Vector Repeater Scale": ("scale", lambda v: v * 100),
 
-
         "ADBE Vector RoundCorner Radius": ("radius", None),
 
         "ADBE Vector Trim Start": ("start", None),
@@ -466,10 +463,15 @@ class AepParser(RiffParser):
     }
 
     def __init__(self, file):
-        super().__init__(file)
+        if file is not None:
+            super().__init__(file)
 
-        if self.header.format != "Egg!":
-            raise Exception("Not an AEP file")
+            if self.header.format != "Egg!":
+                raise Exception("Not an AEP file")
+        else:
+            # XML initialization
+            self.end = 0
+            self.endian = BigEndian()
 
         self.chunk_parsers = {
             "tdsn": RiffParser.read_sub_chunks,
@@ -483,8 +485,9 @@ class AepParser(RiffParser):
             "cdat": AepParser.read_cdat,
             "lhd3": AepParser.read_lhd3,
             "ldat": AepParser.read_ldat,
-            "tdum": read_floats,
-            "tduM": read_floats,
+            "ppSn": RiffParser.read_float,
+            "tdum": RiffParser.read_float,
+            "tduM": RiffParser.read_float,
             "tdsb": AepParser.read_number,
             "pprf": AepParser.read_pprf,
             "fvdv": AepParser.read_number,
@@ -514,8 +517,6 @@ class AepParser(RiffParser):
         self.list_type = ListType.Other
         self.keyframe_type = KeyframeType.MultiDimensional
         self.ldat_size = 0
-        self.time_mult = 1
-        self.time_offset = 0
 
     def read_shph(self, length):
         reader = StructuredReader(self, length)
@@ -565,7 +566,6 @@ class AepParser(RiffParser):
         reader.read_attribute("", 8, float) # mostly 0.0, sometimes 0.333
         reader.read_attribute("", 4, bytes) # probs some flags
         reader.read_attribute("", 4, bytes) # probs some flags
-
 
         reader.finalize()
         reader.attr_bit("position", 1, 3)
@@ -878,6 +878,70 @@ class AepParser(RiffParser):
 
         setattr(object, prop_name, prop)
 
+
+def xml_value_to_python(element):
+    if element.tag == "prop.map":
+        return xml_value_to_python(element[0])
+    elif element.tag == "prop.list":
+        return xml_list_to_dict(element)
+    elif element.tag == "array":
+        return xml_array_to_list(element)
+    elif element.tag == "int":
+        return int(element.text)
+    elif element.tag == "float":
+        return float(element.text)
+    elif element.tag == "string":
+        return element.text
+    else:
+        return element
+
+
+def xml_array_to_list(element):
+    data = []
+    for ch in element:
+        if ch.tag != "array.type":
+            data.append(xml_value_to_python(ch))
+    return data
+
+
+def xml_list_to_dict(element):
+    data = {}
+    for pair in element.findall("prop.pair"):
+        key = None
+        value = None
+        for ch in pair:
+            if ch.tag == "key":
+                key = ch.text
+            else:
+                value = xml_value_to_python(ch)
+        data[key] = value
+
+    return data
+
+
+def parse_gradient_xml(gradient, colors_prop):
+    flat = []
+
+    data = gradient["Gradient Color Data"]
+
+    for stop in data["Color Stops"]["Stops List"].values():
+        colors = stop["Stops Color"]
+        flat += [colors[0], colors[2], colors[3], colors[4]]
+
+    for stop in data["Alpha Stops"]["Stops List"].values():
+        alpha = stop["Stops Alpha"]
+        flat += [alpha[0], alpha[2]]
+
+    colors_prop.count = data["Color Stops"]["Stops Size"]
+
+    return NVector(*flat)
+
+
+class AepConverter:
+    def __init__(self):
+        self.time_mult = 1
+        self.time_offset = 0
+
     def parse_property_tbds(self, chunk, prop, policy):
         static, kf, expr = chunk.data.find_multiple("cdat", "list", "Utf8")
 
@@ -998,64 +1062,10 @@ class AepParser(RiffParser):
                 if name is None or name == chunk.data.find("Utf8").data:
                     return self.item_chunk_to_animation(chunk)
 
-
-
-def xml_value_to_python(element):
-    if element.tag == "prop.map":
-        return xml_value_to_python(element[0])
-    elif element.tag == "prop.list":
-        return xml_list_to_dict(element)
-    elif element.tag == "array":
-        return xml_array_to_list(element)
-    elif element.tag == "int":
-        return int(element.text)
-    elif element.tag == "float":
-        return float(element.text)
-    elif element.tag == "string":
-        return element.text
-    else:
-        return element
-
-
-def xml_array_to_list(element):
-    data = []
-    for ch in element:
-        if ch.tag != "array.type":
-            data.append(xml_value_to_python(ch))
-    return data
-
-
-def xml_list_to_dict(element):
-    data = {}
-    for pair in element.findall("prop.pair"):
-        key = None
-        value = None
-        for ch in pair:
-            if ch.tag == "key":
-                key = ch.text
-            else:
-                value = xml_value_to_python(ch)
-        data[key] = value
-
-    return data
-
-
-def parse_gradient_xml(gradient, colors_prop):
-    flat = []
-
-    data = gradient["Gradient Color Data"]
-
-    for stop in data["Color Stops"]["Stops List"].values():
-        colors = stop["Stops Color"]
-        flat += [colors[0], colors[2], colors[3], colors[4]]
-
-    for stop in data["Alpha Stops"]["Stops List"].values():
-        alpha = stop["Stops Alpha"]
-        flat += [alpha[0], alpha[2]]
-
-    colors_prop.count = data["Color Stops"]["Stops Size"]
-
-    return NVector(*flat)
+    def import_aep(self, chunks, name):
+        for chunk in chunks:
+            if chunk.header == "LIST" and chunk.data.type == "Fold":
+                return self.fold_chunk_extract_animation(chunk, comp)
 
 
 @importer("AfterEffect Project", ["aep"], [
@@ -1067,7 +1077,62 @@ def import_aep(file, comp=None):
             return import_aep(fileobj, comp)
 
     parser = AepParser(file)
+    return AepConverter().import_aep(parser)
 
-    for chunk in parser:
-        if chunk.header == "LIST" and chunk.data.type == "Fold":
-            return parser.fold_chunk_extract_animation(chunk, comp)
+
+def aepx_to_chunk(element, parser):
+    header = element.tag.rsplit("}", 1)[-1].ljust(4)
+    if header == "ProjectXMPMetadata":
+        chunk = RiffChunk(header, 0, element.text)
+    elif header == "string":
+        txt = element.text or ""
+        chunk = RiffChunk("Utf8", len(txt), txt)
+    elif header == "numS":
+        return RiffChunk(header, 0, int(element[0].text))
+    elif header == "ppSn":
+        return RiffChunk(header, 8, float(element[0].text))
+    elif "bdata" in element.attrib:
+        hex = element.attrib["bdata"]
+        raw = bytes(int(hex[i:i+2], 16) for i in range(0, len(hex), 2))
+
+        if header in parser.chunk_parsers:
+            bdata = io.BytesIO(raw)
+            parser.file = bdata
+            data = parser.chunk_parsers[header](parser, len(raw))
+        else:
+            data = raw
+
+        chunk = RiffChunk(header, len(raw), data)
+    else:
+        if header == "AfterEffectsProject":
+            header = "RIFX"
+            type = ""
+        elif header in ["tdsn", "fnam", "ppSn"]:
+            type = ""
+        else:
+            type = header
+            header = "LIST"
+
+        if header == "LIST":
+            parser.on_list_start(type)
+
+        data = RiffList(type, tuple(aepx_to_chunk(child, parser) for child in element))
+        chunk = RiffChunk(header, 0, data)
+
+        if header == "LIST":
+            parser.on_list_end(type)
+
+    parser.on_chunk(chunk)
+
+    return chunk
+
+
+
+@importer("AfterEffect Project XML", ["aepx"], [
+    ExtraOption("comp", help="Name of the composition to extract", default=None)
+], slug="aepx")
+def import_aepx(file, comp=None):
+    dom = ElementTree.parse(file)
+    parser = AepParser(None)
+    rifx = aepx_to_chunk(dom.getroot())
+    return AepConverter().import_aep(rifx.data.children)

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
 import argparse
-#from etree import ElementTree
+from xml.etree import ElementTree
 from PIL import ImageCms
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "lib"
 ))
-from lottie.importers.aep import RiffList, StructuredData, AepParser
+from lottie.importers.aep import RiffList, StructuredData, AepParser, aepx_to_chunk
 
 
 def format_bytes(val, hex_bytes):
@@ -107,11 +107,20 @@ parser.add_argument(
 args = parser.parse_args()
 
 with open(args.infile, "rb") as f:
-    aep_parser = AepParser(f)
+    head = f.read(3)
+    f.seek(0)
 
-    for chunk in aep_parser:
+    if head == b'RIF':
+        aep_parser = AepParser(f)
+        root = aep_parser.parse()
+    else:
+        dom = ElementTree.parse(f)
+        aep_parser = AepParser(None)
+        root = aepx_to_chunk(dom.getroot(), aep_parser)
+
+    for chunk in root.data.children:
         chunk_to_yaml(chunk, args.wrap_bytes, args.bytes == "hex")
 
     if args.xmp:
-        print("_xm[: _")
+        print("ProjectXMPMetadata: _")
         print(f.read().decode("utf8"))

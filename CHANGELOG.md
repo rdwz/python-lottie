@@ -3,6 +3,7 @@
  * Aded support for parsing hexadecimal colors that include alpha
  * Loading a lottie with missing properties will retain the default value
  * Fixed parsing for lottie files with unknown effects
+ * Parser for after effects .aep and .aepx project files
 
 ## 0.7.0 - 2022-09-11
  * Improved color management
