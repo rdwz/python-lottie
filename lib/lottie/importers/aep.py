@@ -9,6 +9,7 @@ from .base import importer
 from .. import objects
 from .. import NVector
 from ..utils.color import Color
+from ..parsers.baseporter import ExtraOption
 
 
 class Endianness:
@@ -968,12 +969,9 @@ class AepParser(RiffParser):
 
         return lottie_obj
 
-    def chunk_to_animation(self, fold):
+    def item_chunk_to_animation(self, chunk):
         anim = objects.Animation()
         self.anim = anim
-        for chunk in fold.data.children:
-            if chunk.header == "LIST" and chunk.data.type == "Item" and chunk.data.find("idta").data.type == 4:
-                break
 
         for item in chunk.data.children:
             if item.header == "Utf8":
@@ -993,6 +991,13 @@ class AepParser(RiffParser):
                 anim.layers.append(self.chunk_to_layer(item))
 
         return anim
+
+    def fold_chunk_extract_animation(self, fold, name):
+        for chunk in fold.data.children:
+            if chunk.header == "LIST" and chunk.data.type == "Item" and chunk.data.find("idta").data.type == 4:
+                if name is None or name == chunk.data.find("Utf8").data:
+                    return self.item_chunk_to_animation(chunk)
+
 
 
 def xml_value_to_python(element):
@@ -1053,14 +1058,16 @@ def parse_gradient_xml(gradient, colors_prop):
     return NVector(*flat)
 
 
-@importer("AfterEffect Project", ["aep"])
-def import_aep(file):
+@importer("AfterEffect Project", ["aep"], [
+    ExtraOption("comp", help="Name of the composition to extract", default=None)
+], slug="aep")
+def import_aep(file, comp=None):
     if isinstance(file, str):
         with open(file, "rb") as fileobj:
-            return import_aep(fileobj)
+            return import_aep(fileobj, comp)
 
     parser = AepParser(file)
 
     for chunk in parser:
         if chunk.header == "LIST" and chunk.data.type == "Fold":
-            return parser.chunk_to_animation(chunk)
+            return parser.fold_chunk_extract_animation(chunk, comp)
