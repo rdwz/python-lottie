@@ -76,6 +76,7 @@ mn_category = {
     "ADBE Vector Repeater End Opacity": "scalar",
 }
 
+
 @dataclasses.dataclass(frozen=True)
 class Prop:
     mn: str
@@ -124,7 +125,6 @@ class CommonBytes:
         for i in self.different_indexes:
             diff.append(data[i])
         return diff
-
 
 
 def gather_tdb4(chunk, data, const, mn=None, is_ef=False):

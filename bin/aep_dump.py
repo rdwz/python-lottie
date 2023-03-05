@@ -25,7 +25,7 @@ def value_to_yaml(val, wrap_bytes, hex_bytes, indent):
     if isinstance(val, bytes):
         if len(val) <= wrap_bytes:
             return format_bytes(val, hex_bytes)
-        formatted = "";
+        formatted = ""
         for i in range(0, len(val), wrap_bytes):
             if i == 0:
                 formatted += format_bytes(val[0:wrap_bytes], hex_bytes) + "\n"
@@ -74,8 +74,6 @@ def structured_value_to_yaml(title, value, wrap_bytes, hex_bytes, indp):
 
     for k, v in items:
         structured_value_to_yaml("" if k.startswith("_") else k, v, wrap_bytes, hex_bytes, indp + "    ")
-
-
 
 
 parser = argparse.ArgumentParser(

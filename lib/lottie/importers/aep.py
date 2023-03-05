@@ -352,116 +352,6 @@ def shape_with_defaults(cls, **defaults):
 
 
 class AepParser(RiffParser):
-    placeholder = "-_0_/-"
-    shapes = {
-        "ADBE Vector Group": objects.shapes.Group,
-
-        "ADBE Vector Shape - Group": objects.shapes.Path,
-        "ADBE Vector Shape - Rect": objects.shapes.Rect,
-        "ADBE Vector Shape - Star": objects.shapes.Star,
-        "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
-
-        "ADBE Vector Graphic - Stroke": shape_with_defaults(
-            objects.shapes.Stroke,
-            width=2,
-            color=Color(1, 1, 1),
-            line_cap=objects.shapes.LineCap.Butt,
-            line_join=objects.shapes.LineJoin.Miter,
-            miter_limit=4,
-        ),
-        "ADBE Vector Graphic - Fill": shape_with_defaults(
-            objects.shapes.Fill,
-            color=Color(1, 0, 0),
-            fill_rule=objects.shapes.FillRule.NonZero,
-        ),
-        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
-        "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
-
-        "ADBE Vector Filter - Merge": objects.shapes.Merge,
-        "ADBE Vector Filter - Offset": objects.shapes.OffsetPath,
-        "ADBE Vector Filter - PB": objects.shapes.PuckerBloat,
-        "ADBE Vector Filter - Repeater": objects.shapes.Repeater,
-        "ADBE Vector Filter - RC": objects.shapes.RoundedCorners,
-        "ADBE Vector Filter - Trim": objects.shapes.Trim,
-        "ADBE Vector Filter - Twist": objects.shapes.Twist,
-        "ADBE Vector Filter - Zigzag": objects.shapes.ZigZag,
-    }
-    properties = {
-        "ADBE Time Remapping": ("time_remapping", None),
-
-        "ADBE Vector Shape": ("shape", None),
-        "ADBE Vector Shape Direction": ("direction", objects.shapes.ShapeDirection),
-        "ADBE Vector Rect Roundness": ("rounded", None),
-        "ADBE Vector Rect Size": ("size", None),
-        "ADBE Vector Rect Position": ("position", None),
-        "ADBE Vector Ellipse Size": ("size", None),
-        "ADBE Vector Ellipse Position": ("position", None),
-
-        "ADBE Vector Star Type": ("star_type", objects.shapes.StarType),
-        "ADBE Vector Star Points": ("points", None),
-        "ADBE Vector Star Position": ("position", None),
-        "ADBE Vector Star Inner Radius": ("inner_radius", None),
-        "ADBE Vector Star Outer Radius": ("outer_radius", None),
-        "ADBE Vector Star Inner Roundess": ("inner_roundness", None),
-        "ADBE Vector Star Outer Roundess": ("outer_roundness", None),
-        "ADBE Vector Star Rotation": ("rotation", None),
-
-        "ADBE Vector Fill Color": ("color", convert_value_color),
-
-        "ADBE Vector Stroke Color": ("color", convert_value_color),
-        "ADBE Vector Stroke Width": ("width", None),
-        "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
-        "ADBE Vector Stroke Line Cap": ("line_cap", objects.shapes.LineCap),
-        "ADBE Vector Stroke Line Join": ("line_join", objects.shapes.LineJoin),
-
-        "ADBE Vector Grad Start Pt": ("start_point", None),
-        "ADBE Vector Grad End Pt": ("end_point", None),
-        "ADBE Vector Grad Colors": ("colors", None),
-
-        "ADBE Vector Merge Type": ("merge_mode", objects.shapes.MergeMode),
-
-        "ADBE Vector Offset Amount": ("amount", None),
-        "ADBE Vector Offset Line Join": ("line_join", objects.shapes.LineJoin),
-        "ADBE Vector Offset Miter Limit": ("miter_limit", None),
-
-        "ADBE Vector PuckerBloat Amount": ("amount", None),
-
-        "ADBE Vector Repeater Copies": ("copies", None),
-        "ADBE Vector Repeater Offset": ("offset", None),
-        "ADBE Vector Repeater Order": ("composite", objects.shapes.Composite),
-        #"ADBE Vector Repeater Transform": ??
-        "ADBE Vector Repeater Anchor Point": ("anchor_point", None),
-        "ADBE Vector Repeater Position": ("position", None),
-        "ADBE Vector Repeater Rotation": ("rotation", None),
-        "ADBE Vector Repeater Start Opacity": ("start_opacity", lambda v: v * 100),
-        "ADBE Vector Repeater End Opacity": ("end_opacity", lambda v: v * 100),
-        "ADBE Vector Repeater Scale": ("scale", lambda v: v * 100),
-
-        "ADBE Vector RoundCorner Radius": ("radius", None),
-
-        "ADBE Vector Trim Start": ("start", None),
-        "ADBE Vector Trim End": ("end", None),
-        "ADBE Vector Trim Offset": ("offset", None),
-
-        "ADBE Vector Twist Angle": ("angle", None),
-        "ADBE Vector Twist Center": ("center", None),
-
-        "ADBE Vector Zigzag Size": ("amplitude", None),
-        "ADBE Vector Zigzag Detail": ("frequency", None),
-
-        "ADBE Anchor Point": ("anchor_point", None),
-        "ADBE Position": ("position", None),
-        "ADBE Rotate Z": ("rotation", None),
-        "ADBE Opacity": ("opacity", lambda v: v * 100),
-        "ADBE Scale": ("scale", lambda v: v * 100),
-
-        "ADBE Vector Anchor Point": ("anchor_point", None),
-        "ADBE Vector Position": ("position", None),
-        "ADBE Vector Rotation": ("rotation", None),
-        "ADBE Vector Group Opacity": ("opacity", None),
-        "ADBE Vector Scale": ("scale", None),
-    }
-
     def __init__(self, file):
         if file is not None:
             super().__init__(file)
@@ -554,7 +444,8 @@ class AepParser(RiffParser):
         reader.read_attribute("", 8, float) # 1.0
         reader.read_attribute("", 2, bytes) # 1 for gradients, markers, orientation, shape. else 0
         reader.read_attribute("", 1, bytes) # 00
-        reader.read_attribute("type", 2, bytes) # probs some flags. 0101 for colors, 0404 for enums, 0809 for multidim or pos, 0800 1800 for some weird ones, scalars mostly 0809 but also 0408
+        reader.read_attribute("type", 2, bytes) # probs some flags. 0101 for colors, 0404 for enums, 0809 for multidim or pos,
+                                                # 0800 1800 for some weird ones, scalars mostly 0809 but also 0408
         reader.read_attribute("", 7, bytes) # bunch of 00
         reader.read_attribute("animated", 1, int) # 01 iff animated
         reader.read_attribute("", 7, bytes) # bunch of 00
@@ -806,49 +697,6 @@ class AepParser(RiffParser):
         elif type == "om-s":
             self.keyframe_type = KeyframeType.MultiDimensional
 
-    def read_properties(self, object, chunk):
-        match_name = None
-        for item in chunk.data.children:
-            # Match name
-            if item.header == "tdmn":
-                match_name = item.data
-            # Name
-            elif item.header == "tdsn" and len(item.data.children) > 0:
-                name = item.data.children[0]
-                if name.header == "Utf8" and name.data != self.placeholder and name.data:
-                    object.name = name.data
-            # Shape hidden
-            elif item.header == "tdsb":
-                if (item.data & 1) == 0:
-                    object.hidden = True
-            # MultiDimensional property
-            elif item.header == "LIST" and item.data.type == "tdbs":
-                self.parse_property_multidimensional(object, match_name, item)
-            # Shape property
-            elif item.header == "LIST" and item.data.type == "om-s":
-                self.parse_property_shape(object, match_name, item)
-            # Sub-object
-            elif item.header == "LIST" and item.data.type == "tdgp":
-                if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
-                    self.read_properties(object, item)
-                elif match_name == "ADBE Vector Transform Group" or match_name == "ADBE Transform Group":
-                    self.read_properties(object.transform, item)
-                elif match_name in self.shapes:
-                    child = self.shapes[match_name]()
-                    object.add_shape(child)
-                    child.match_name = match_name
-                    self.read_properties(child, item)
-            # Gradients
-            elif item.header == "LIST" and item.data.type == "GCst" and match_name == "ADBE Vector Grad Colors":
-                prop = object.colors.colors
-                for i, grad in enumerate(item.data.find_list("GCky").data.children):
-                    if grad.header == "Utf8":
-                        if not prop.animated:
-                            prop.value = parse_gradient_xml(grad.data, object.colors)
-                            break
-                        elif len(prop.keyframes) < i:
-                            prop.keyframes[i].value = parse_gradient_xml(grad.data, object.colors)
-
     def read_utf8(self, length):
         data = self.read(length).decode("utf8")
         if data.startswith("<?xml version='1.0'?>"):
@@ -862,21 +710,6 @@ class AepParser(RiffParser):
 
     def read_utf16(self, length):
         return self.read(length).decode("utf16")
-
-    def parse_property_multidimensional(self, object, match_name, chunk):
-        meta = self.properties.get(match_name)
-        if not meta:
-            return
-
-        prop_name, converter = meta
-        policy = PropertyPolicyMultidim()
-        if converter is not None:
-            policy.converter = converter
-
-        prop = objects.properties.MultiDimensional()
-        self.parse_property_tbds(chunk, prop, policy)
-
-        setattr(object, prop_name, prop)
 
 
 def xml_value_to_python(element):
@@ -938,9 +771,177 @@ def parse_gradient_xml(gradient, colors_prop):
 
 
 class AepConverter:
+    placeholder = "-_0_/-"
+    shapes = {
+        "ADBE Vector Group": objects.shapes.Group,
+
+        "ADBE Vector Shape - Group": objects.shapes.Path,
+        "ADBE Vector Shape - Rect": objects.shapes.Rect,
+        "ADBE Vector Shape - Star": objects.shapes.Star,
+        "ADBE Vector Shape - Ellipse": objects.shapes.Ellipse,
+
+        "ADBE Vector Graphic - Stroke": shape_with_defaults(
+            objects.shapes.Stroke,
+            width=2,
+            color=Color(1, 1, 1),
+            line_cap=objects.shapes.LineCap.Butt,
+            line_join=objects.shapes.LineJoin.Miter,
+            miter_limit=4,
+        ),
+        "ADBE Vector Graphic - Fill": shape_with_defaults(
+            objects.shapes.Fill,
+            color=Color(1, 0, 0),
+            fill_rule=objects.shapes.FillRule.NonZero,
+        ),
+        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
+        "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
+
+        "ADBE Vector Filter - Merge": objects.shapes.Merge,
+        "ADBE Vector Filter - Offset": objects.shapes.OffsetPath,
+        "ADBE Vector Filter - PB": objects.shapes.PuckerBloat,
+        "ADBE Vector Filter - Repeater": objects.shapes.Repeater,
+        "ADBE Vector Filter - RC": objects.shapes.RoundedCorners,
+        "ADBE Vector Filter - Trim": objects.shapes.Trim,
+        "ADBE Vector Filter - Twist": objects.shapes.Twist,
+        "ADBE Vector Filter - Zigzag": objects.shapes.ZigZag,
+    }
+    properties = {
+        "ADBE Time Remapping": ("time_remapping", None),
+
+        "ADBE Vector Shape": ("shape", None),
+        "ADBE Vector Shape Direction": ("direction", objects.shapes.ShapeDirection),
+        "ADBE Vector Rect Roundness": ("rounded", None),
+        "ADBE Vector Rect Size": ("size", None),
+        "ADBE Vector Rect Position": ("position", None),
+        "ADBE Vector Ellipse Size": ("size", None),
+        "ADBE Vector Ellipse Position": ("position", None),
+
+        "ADBE Vector Star Type": ("star_type", objects.shapes.StarType),
+        "ADBE Vector Star Points": ("points", None),
+        "ADBE Vector Star Position": ("position", None),
+        "ADBE Vector Star Inner Radius": ("inner_radius", None),
+        "ADBE Vector Star Outer Radius": ("outer_radius", None),
+        "ADBE Vector Star Inner Roundess": ("inner_roundness", None),
+        "ADBE Vector Star Outer Roundess": ("outer_roundness", None),
+        "ADBE Vector Star Rotation": ("rotation", None),
+
+        "ADBE Vector Fill Color": ("color", convert_value_color),
+
+        "ADBE Vector Stroke Color": ("color", convert_value_color),
+        "ADBE Vector Stroke Width": ("width", None),
+        "ADBE Vector Stroke Miter Limit": ("animated_miter_limit", None),
+        "ADBE Vector Stroke Line Cap": ("line_cap", objects.shapes.LineCap),
+        "ADBE Vector Stroke Line Join": ("line_join", objects.shapes.LineJoin),
+
+        "ADBE Vector Grad Start Pt": ("start_point", None),
+        "ADBE Vector Grad End Pt": ("end_point", None),
+        "ADBE Vector Grad Colors": ("colors", None),
+
+        "ADBE Vector Merge Type": ("merge_mode", objects.shapes.MergeMode),
+
+        "ADBE Vector Offset Amount": ("amount", None),
+        "ADBE Vector Offset Line Join": ("line_join", objects.shapes.LineJoin),
+        "ADBE Vector Offset Miter Limit": ("miter_limit", None),
+
+        "ADBE Vector PuckerBloat Amount": ("amount", None),
+
+        "ADBE Vector Repeater Copies": ("copies", None),
+        "ADBE Vector Repeater Offset": ("offset", None),
+        "ADBE Vector Repeater Order": ("composite", objects.shapes.Composite),
+        #"ADBE Vector Repeater Transform": ??
+        "ADBE Vector Repeater Anchor Point": ("anchor_point", None),
+        "ADBE Vector Repeater Position": ("position", None),
+        "ADBE Vector Repeater Rotation": ("rotation", None),
+        "ADBE Vector Repeater Start Opacity": ("start_opacity", lambda v: v * 100),
+        "ADBE Vector Repeater End Opacity": ("end_opacity", lambda v: v * 100),
+        "ADBE Vector Repeater Scale": ("scale", lambda v: v * 100),
+
+        "ADBE Vector RoundCorner Radius": ("radius", None),
+
+        "ADBE Vector Trim Start": ("start", None),
+        "ADBE Vector Trim End": ("end", None),
+        "ADBE Vector Trim Offset": ("offset", None),
+
+        "ADBE Vector Twist Angle": ("angle", None),
+        "ADBE Vector Twist Center": ("center", None),
+
+        "ADBE Vector Zigzag Size": ("amplitude", None),
+        "ADBE Vector Zigzag Detail": ("frequency", None),
+
+        "ADBE Anchor Point": ("anchor_point", None),
+        "ADBE Position": ("position", None),
+        "ADBE Rotate Z": ("rotation", None),
+        "ADBE Opacity": ("opacity", lambda v: v * 100),
+        "ADBE Scale": ("scale", lambda v: v * 100),
+
+        "ADBE Vector Anchor Point": ("anchor_point", None),
+        "ADBE Vector Position": ("position", None),
+        "ADBE Vector Rotation": ("rotation", None),
+        "ADBE Vector Group Opacity": ("opacity", None),
+        "ADBE Vector Scale": ("scale", None),
+    }
+
     def __init__(self):
         self.time_mult = 1
         self.time_offset = 0
+
+    def read_properties(self, object, chunk):
+        match_name = None
+        for item in chunk.data.children:
+            # Match name
+            if item.header == "tdmn":
+                match_name = item.data
+            # Name
+            elif item.header == "tdsn" and len(item.data.children) > 0:
+                name = item.data.children[0]
+                if name.header == "Utf8" and name.data != self.placeholder and name.data:
+                    object.name = name.data
+            # Shape hidden
+            elif item.header == "tdsb":
+                if (item.data & 1) == 0:
+                    object.hidden = True
+            # MultiDimensional property
+            elif item.header == "LIST" and item.data.type == "tdbs":
+                self.parse_property_multidimensional(object, match_name, item)
+            # Shape property
+            elif item.header == "LIST" and item.data.type == "om-s":
+                self.parse_property_shape(object, match_name, item)
+            # Sub-object
+            elif item.header == "LIST" and item.data.type == "tdgp":
+                if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
+                    self.read_properties(object, item)
+                elif match_name == "ADBE Vector Transform Group" or match_name == "ADBE Transform Group":
+                    self.read_properties(object.transform, item)
+                elif match_name in self.shapes:
+                    child = self.shapes[match_name]()
+                    object.add_shape(child)
+                    child.match_name = match_name
+                    self.read_properties(child, item)
+            # Gradients
+            elif item.header == "LIST" and item.data.type == "GCst" and match_name == "ADBE Vector Grad Colors":
+                prop = object.colors.colors
+                for i, grad in enumerate(item.data.find_list("GCky").data.children):
+                    if grad.header == "Utf8":
+                        if not prop.animated:
+                            prop.value = parse_gradient_xml(grad.data, object.colors)
+                            break
+                        elif len(prop.keyframes) < i:
+                            prop.keyframes[i].value = parse_gradient_xml(grad.data, object.colors)
+
+    def parse_property_multidimensional(self, object, match_name, chunk):
+        meta = self.properties.get(match_name)
+        if not meta:
+            return
+
+        prop_name, converter = meta
+        policy = PropertyPolicyMultidim()
+        if converter is not None:
+            policy.converter = converter
+
+        prop = objects.properties.MultiDimensional()
+        self.parse_property_tbds(chunk, prop, policy)
+
+        setattr(object, prop_name, prop)
 
     def parse_property_tbds(self, chunk, prop, policy):
         static, kf, expr = chunk.data.find_multiple("cdat", "list", "Utf8")
@@ -1065,7 +1066,7 @@ class AepConverter:
     def import_aep(self, chunks, name):
         for chunk in chunks:
             if chunk.header == "LIST" and chunk.data.type == "Fold":
-                return self.fold_chunk_extract_animation(chunk, comp)
+                return self.fold_chunk_extract_animation(chunk, name)
 
 
 @importer("AfterEffect Project", ["aep"], [
@@ -1077,7 +1078,7 @@ def import_aep(file, comp=None):
             return import_aep(fileobj, comp)
 
     parser = AepParser(file)
-    return AepConverter().import_aep(parser)
+    return AepConverter().import_aep(parser, comp)
 
 
 def aepx_to_chunk(element, parser):
@@ -1127,12 +1128,11 @@ def aepx_to_chunk(element, parser):
     return chunk
 
 
-
 @importer("AfterEffect Project XML", ["aepx"], [
     ExtraOption("comp", help="Name of the composition to extract", default=None)
 ], slug="aepx")
 def import_aepx(file, comp=None):
     dom = ElementTree.parse(file)
     parser = AepParser(None)
-    rifx = aepx_to_chunk(dom.getroot())
-    return AepConverter().import_aep(rifx.data.children)
+    rifx = aepx_to_chunk(dom.getroot(), parser)
+    return AepConverter().import_aep(rifx.data.children, comp)
