@@ -291,8 +291,8 @@ class StructuredReader:
         else:
             raise TypeError("Unknown value type %s" % type)
 
-    def attr_bit(self, name, byte, bit):
-        setattr(self.value, name, (self.value.attrs[byte] & (1 << bit)) != 0)
+    def attr_bit(self, name, byte, bit, attr="attrs"):
+        setattr(self.value, name, (getattr(self.value, attr)[byte] & (1 << bit)) != 0)
 
 
 def convert_value_color(arr):
@@ -402,6 +402,7 @@ class AepParser(RiffParser):
             "mrid": AepParser.read_number,
             "numS": AepParser.read_number,
             "shph": AepParser.read_shph,
+            "otda": AepParser.read_otda,
         }
         self.prop_dimension = None
         self.list_type = ListType.Other
@@ -442,10 +443,8 @@ class AepParser(RiffParser):
         reader.read_attribute("", 8, float) # 1.0
         reader.read_attribute("", 8, float) # 1.0
         reader.read_attribute("", 8, float) # 1.0
-        reader.read_attribute("", 2, bytes) # 1 for gradients, markers, orientation, shape. else 0
-        reader.read_attribute("", 1, bytes) # 00
-        reader.read_attribute("type", 2, bytes) # probs some flags. 0101 for colors, 0404 for enums, 0809 for multidim or pos,
-                                                # 0800 1800 for some weird ones, scalars mostly 0809 but also 0408
+        reader.read_attribute("type", 4, bytes)
+        reader.read_attribute("", 1, bytes) # Seems somehow correlated with the previous byte
         reader.read_attribute("", 7, bytes) # bunch of 00
         reader.read_attribute("animated", 1, int) # 01 iff animated
         reader.read_attribute("", 7, bytes) # bunch of 00
@@ -461,7 +460,9 @@ class AepParser(RiffParser):
         reader.finalize()
         reader.attr_bit("position", 1, 3)
         reader.attr_bit("static", 1, 0)
-        reader.value.color = reader.value.type == b'\1\1'
+
+        reader.attr_bit("special", 1, 0, "type")
+        reader.attr_bit("color", 3, 0, "type")
         data = reader.value
 
         self.prop_dimension = data.components
@@ -469,6 +470,9 @@ class AepParser(RiffParser):
             self.keyframe_type = KeyframeType.Position
         elif data.color:
             self.keyframe_type = KeyframeType.Color
+        elif data.special:
+            self.keyframe_type = KeyframeType.NoValue
+
         return data
 
     def read_cdat(self, length):
@@ -632,6 +636,11 @@ class AepParser(RiffParser):
         reader.finalize()
         return reader.value
 
+    def read_ldat_keyframe_unknown(self, length):
+        reader = self.read_ldat_keyframe_common(length)
+        reader.finalize()
+        return reader.value
+
     def read_ldat_item_raw(self, length):
         return self.read(length)
 
@@ -658,6 +667,8 @@ class AepParser(RiffParser):
             else:
                 item_func = self.read_ldat_keyframe_multidimensional
 
+            #item_func = self.read_ldat_keyframe_unknown
+
             self.keyframe_type = KeyframeType.MultiDimensional
 
         item_count = self.ldat_size // group
@@ -677,25 +688,16 @@ class AepParser(RiffParser):
         return value
 
     def on_list_start(self, type):
-        if type == "GCst":
-            self.keyframe_type = KeyframeType.NoValue
-        elif type == "shap":
+        if type == "shap":
             self.list_type = ListType.Shape
         elif type == "tdbs":
             self.list_type = ListType.Keyframe
-        elif type == "om-s":
-            self.keyframe_type = KeyframeType.NoValue
 
     def on_list_end(self, type):
-        if type == "GCst":
-            self.keyframe_type = KeyframeType.MultiDimensional
-        elif type == "shap":
+        if type == "shap":
             self.list_type = ListType.Other
         elif type == "tdbs":
             self.list_type = ListType.Other
-            self.keyframe_type = KeyframeType.MultiDimensional
-        elif type == "om-s":
-            self.keyframe_type = KeyframeType.MultiDimensional
 
     def read_utf8(self, length):
         data = self.read(length).decode("utf8")
@@ -710,6 +712,14 @@ class AepParser(RiffParser):
 
     def read_utf16(self, length):
         return self.read(length).decode("utf16")
+
+    def read_otda(self, length):
+        reader = StructuredReader(self, length)
+        reader.read_attribute("x", 8, float)
+        reader.read_attribute("y", 8, float)
+        reader.read_attribute("z", 8, float)
+        reader.finalize()
+        return reader.value
 
 
 def xml_value_to_python(element):
@@ -1108,7 +1118,7 @@ def aepx_to_chunk(element, parser):
         if header == "AfterEffectsProject":
             header = "RIFX"
             type = ""
-        elif header in ["tdsn", "fnam", "ppSn"]:
+        elif header in ["tdsn", "fnam"]:
             type = ""
         else:
             type = header

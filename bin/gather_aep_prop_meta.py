@@ -74,6 +74,8 @@ mn_category = {
     "ADBE Vector Repeater Scale": "multi",
     "ADBE Vector Repeater Start Opacity": "scalar",
     "ADBE Vector Repeater End Opacity": "scalar",
+
+    "ADBE Camera Aperture": "scalar",
 }
 
 
