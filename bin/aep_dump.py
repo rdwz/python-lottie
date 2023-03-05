@@ -59,7 +59,7 @@ def structured_value_to_yaml(title, value, wrap_bytes, hex_bytes, indp):
         print_data = ""
         items = [(k, v) for k, v in vars(value).items() if k != "raw_bytes"]
     elif isinstance(value, (list, tuple)):
-        if len(value) < 20 and len(value) > 0 and isinstance(value[0], (int, float)):
+        if len(value) < 10 and len(value) > 0 and isinstance(value[0], (int, float)):
             print_data = value
         else:
             print_data = ""

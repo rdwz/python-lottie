@@ -233,7 +233,10 @@ class StructuredReader:
 
     def read_string0(self, length):
         read = self.read_raw(length).rstrip(b"\0")
-        return read.decode("utf8")
+        try:
+            return read.decode("utf8")
+        except UnicodeDecodeError:
+            return read
 
     def read_array(self, count, length, type):
         value = []
@@ -307,6 +310,7 @@ class KeyframeType(enum.Enum):
     MultiDimensional = enum.auto()
     Position = enum.auto()
     NoValue = enum.auto()
+    Color = enum.auto()
 
 
 class PropertyPolicyMultidim:
@@ -338,7 +342,11 @@ def shape_with_defaults(cls, **defaults):
     def callback():
         obj = cls()
         for k, v in defaults.items():
-            getattr(obj, k).value = v
+            prop = getattr(obj, k)
+            if isinstance(prop, objects.properties.AnimatableMixin):
+                prop.value = v
+            else:
+                setattr(obj, k, v)
         return obj
 
     return callback
@@ -358,10 +366,14 @@ class AepParser(RiffParser):
             objects.shapes.Stroke,
             width=2,
             color=Color(1, 1, 1),
+            line_cap=objects.shapes.LineCap.Butt,
+            line_join=objects.shapes.LineJoin.Miter,
+            miter_limit=4,
         ),
         "ADBE Vector Graphic - Fill": shape_with_defaults(
             objects.shapes.Fill,
-            color=Color(1, 0, 0)
+            color=Color(1, 0, 0),
+            fill_rule=objects.shapes.FillRule.NonZero,
         ),
         "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
         "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
@@ -376,6 +388,8 @@ class AepParser(RiffParser):
         "ADBE Vector Filter - Zigzag": objects.shapes.ZigZag,
     }
     properties = {
+        "ADBE Time Remapping": ("time_remapping", None),
+
         "ADBE Vector Shape": ("shape", None),
         "ADBE Vector Shape Direction": ("direction", objects.shapes.ShapeDirection),
         "ADBE Vector Rect Roundness": ("rounded", None),
@@ -413,10 +427,17 @@ class AepParser(RiffParser):
 
         "ADBE Vector PuckerBloat Amount": ("amount", None),
 
-        #"ADBE Vector Repeater Transform": ??
         "ADBE Vector Repeater Copies": ("copies", None),
         "ADBE Vector Repeater Offset": ("offset", None),
         "ADBE Vector Repeater Order": ("composite", objects.shapes.Composite),
+        #"ADBE Vector Repeater Transform": ??
+        "ADBE Vector Repeater Anchor Point": ("anchor_point", None),
+        "ADBE Vector Repeater Position": ("position", None),
+        "ADBE Vector Repeater Rotation": ("rotation", None),
+        "ADBE Vector Repeater Start Opacity": ("start_opacity", lambda v: v * 100),
+        "ADBE Vector Repeater End Opacity": ("end_opacity", lambda v: v * 100),
+        "ADBE Vector Repeater Scale": ("scale", lambda v: v * 100),
+
 
         "ADBE Vector RoundCorner Radius": ("radius", None),
 
@@ -435,6 +456,12 @@ class AepParser(RiffParser):
         "ADBE Rotate Z": ("rotation", None),
         "ADBE Opacity": ("opacity", lambda v: v * 100),
         "ADBE Scale": ("scale", lambda v: v * 100),
+
+        "ADBE Vector Anchor Point": ("anchor_point", None),
+        "ADBE Vector Position": ("position", None),
+        "ADBE Vector Rotation": ("rotation", None),
+        "ADBE Vector Group Opacity": ("opacity", None),
+        "ADBE Vector Scale": ("scale", None),
     }
 
     def __init__(self, file):
@@ -445,6 +472,7 @@ class AepParser(RiffParser):
 
         self.chunk_parsers = {
             "tdsn": RiffParser.read_sub_chunks,
+            "fnam": RiffParser.read_sub_chunks,
             "Utf8": AepParser.read_utf8,
             "tdmn": AepParser.read_mn,
             "cdta": AepParser.read_cdta,
@@ -508,17 +536,47 @@ class AepParser(RiffParser):
 
     def read_tdb4(self, length):
         reader = StructuredReader(self, length)
-        reader.skip(3)
-        reader.read_attribute("components", 1, int)
+        reader.skip(2) # db 99
+        reader.read_attribute("components", 2, int)
         reader.read_attribute("attrs", 2, bytes)
+        reader.read_attribute("", 1, bytes) # 00
+        reader.read_attribute("", 1, bytes) # 03 iff position, else 00
+        reader.read_attribute("", 2, bytes) # ffff 0002 0001
+        reader.read_attribute("", 2, bytes) # ffff 0004 0000 0007
+        reader.read_attribute("", 2, bytes) # 0000
+        reader.read_attribute("", 2, bytes) # 6400 7800 5da8 6000 (2nd most sig bit always on?)
+        reader.read_attribute("", 8, float) # most of the time 0.0001
+        reader.read_attribute("", 8, float) # most of the time 1.0, sometimes 1.777
+        reader.read_attribute("", 8, float) # 1.0
+        reader.read_attribute("", 8, float) # 1.0
+        reader.read_attribute("", 8, float) # 1.0
+        reader.read_attribute("", 2, bytes) # 1 for gradients, markers, orientation, shape. else 0
+        reader.read_attribute("", 1, bytes) # 00
+        reader.read_attribute("type", 2, bytes) # probs some flags. 0101 for colors, 0404 for enums, 0809 for multidim or pos, 0800 1800 for some weird ones, scalars mostly 0809 but also 0408
+        reader.read_attribute("", 7, bytes) # bunch of 00
+        reader.read_attribute("animated", 1, int) # 01 iff animated
+        reader.read_attribute("", 7, bytes) # bunch of 00
+        reader.read_attribute("", 4, bytes) # Usually 0, probs flags
+        reader.read_attribute("", 4, int) # most likely flags, only last byte seems to contain data
+        reader.read_attribute("", 8, float) # always 0.0
+        reader.read_attribute("", 8, float) # mostly 0.0, sometimes 0.333
+        reader.read_attribute("", 8, float) # always 0.0
+        reader.read_attribute("", 8, float) # mostly 0.0, sometimes 0.333
+        reader.read_attribute("", 4, bytes) # probs some flags
+        reader.read_attribute("", 4, bytes) # probs some flags
+
+
         reader.finalize()
         reader.attr_bit("position", 1, 3)
         reader.attr_bit("static", 1, 0)
+        reader.value.color = reader.value.type == b'\1\1'
         data = reader.value
 
         self.prop_dimension = data.components
         if data.position:
             self.keyframe_type = KeyframeType.Position
+        elif data.color:
+            self.keyframe_type = KeyframeType.Color
         return data
 
     def read_cdat(self, length):
@@ -555,7 +613,6 @@ class AepParser(RiffParser):
         reader.read_attribute("height", 2, int)
         reader.skip(12)
         reader.read_attribute("frame_rate", 2, int)
-
 
         reader.finalize()
         return reader.value
@@ -649,22 +706,37 @@ class AepParser(RiffParser):
         reader.finalize()
         return reader.value
 
-    def read_ldat_keyframe_gradient(self, length):
+    def read_ldat_keyframe_no_value(self, length):
         reader = self.read_ldat_keyframe_common(length)
         reader.skip(8)
-        reader.read_attribute_array("", 5, 8, float)
+        reader.read_attribute("", 8, float)
+        reader.read_attribute("in_speed", 8, float)
+        reader.read_attribute("in_influence", 8, float)
+        reader.read_attribute("out_speed", 8, float)
+        reader.read_attribute("out_influence", 8, float)
         reader.skip(8)
         reader.finalize()
         return reader.value
 
-    def read_ldat_keyframe(self, length):
+    def read_ldat_keyframe_multidimensional(self, length):
         reader = self.read_ldat_keyframe_common(length)
         reader.read_attribute_array("value", self.prop_dimension, 8, float)
-        if reader.to_read >= 4 * 8 * self.prop_dimension:
-            reader.read_attribute_array("", self.prop_dimension, 8, float)
-            reader.read_attribute_array("", self.prop_dimension, 8, float)
-            reader.read_attribute_array("", self.prop_dimension, 8, float)
-            reader.read_attribute_array("", self.prop_dimension, 8, float)
+        reader.read_attribute_array("in_speed", self.prop_dimension, 8, float)
+        reader.read_attribute_array("in_influence", self.prop_dimension, 8, float)
+        reader.read_attribute_array("out_speed", self.prop_dimension, 8, float)
+        reader.read_attribute_array("out_influence", self.prop_dimension, 8, float)
+        reader.finalize()
+        return reader.value
+
+    def read_ldat_keyframe_color(self, length):
+        reader = self.read_ldat_keyframe_common(length)
+        reader.read_attribute_array("", 2, 8, float)
+        reader.read_attribute("in_speed", 8, float)
+        reader.read_attribute("in_influence", 8, float)
+        reader.read_attribute("out_speed", 8, float)
+        reader.read_attribute("out_influence", 8, float)
+        reader.read_attribute_array("value", self.prop_dimension, 8, float)
+        reader.read_attribute_array("", reader.to_read // 8, 8, float)
         reader.finalize()
         return reader.value
 
@@ -688,9 +760,11 @@ class AepParser(RiffParser):
             if self.keyframe_type == KeyframeType.Position:
                 item_func = self.read_ldat_keyframe_position
             elif self.keyframe_type == KeyframeType.NoValue:
-                item_func = self.read_ldat_keyframe_gradient
+                item_func = self.read_ldat_keyframe_no_value
+            elif self.keyframe_type == KeyframeType.Color:
+                item_func = self.read_ldat_keyframe_color
             else:
-                item_func = self.read_ldat_keyframe
+                item_func = self.read_ldat_keyframe_multidimensional
 
             self.keyframe_type = KeyframeType.MultiDimensional
 
@@ -740,15 +814,12 @@ class AepParser(RiffParser):
             # Name
             elif item.header == "tdsn" and len(item.data.children) > 0:
                 name = item.data.children[0]
-                if name.header == "Utf8" and name.data != self.placeholder:
+                if name.header == "Utf8" and name.data != self.placeholder and name.data:
                     object.name = name.data
             # Shape hidden
             elif item.header == "tdsb":
                 if (item.data & 1) == 0:
                     object.hidden = True
-            # Name (for layer/comp)
-            elif item.header == "Utf8" and item.data != self.placeholder:
-                object.name = item.data
             # MultiDimensional property
             elif item.header == "LIST" and item.data.type == "tdbs":
                 self.parse_property_multidimensional(object, match_name, item)
@@ -878,7 +949,6 @@ class AepParser(RiffParser):
             tl[1] * (1-p[1]) + br[1] * p[1]
         )
 
-
     def chunk_to_layer(self, chunk):
         lottie_obj = objects.layers.ShapeLayer()
         lottie_obj.transform.position.value = NVector(self.anim.width / 2, self.anim.height / 2)
@@ -888,7 +958,7 @@ class AepParser(RiffParser):
                 lottie_obj.name = item.data
             elif item.header == "ldta":
                 self.time_offset = item.data.start_time
-                lottie_obj.start_time = self.time_offset
+                lottie_obj.start_time = self.time_offset * self.time_mult
                 lottie_obj.in_point = self.time(item.data.in_time)
                 lottie_obj.out_point = self.time(item.data.out_time)
                 lottie_obj.threedimensional = item.data.ddd
