@@ -1,9 +1,11 @@
 import io
+import enum
+import json
+import struct
+import base64
 from xml.etree import ElementTree
 from dataclasses import dataclass
-import struct
 from PIL import ImageCms
-import enum
 
 from .base import importer
 from .. import objects
@@ -125,6 +127,7 @@ class RiffParser:
 
         self.header = RiffHeader(self.endian, length, format)
         self.chunk_parsers = {}
+        self.weird_lists = {}
 
     def read(self, length):
         return self.file.read(length)
@@ -143,20 +146,28 @@ class RiffParser:
         else:
             raise TypeError("Invalid float size %s" % length)
 
-    def read_chunk(self):
+    def read_chunk(self, chunk_max_end):
         header = self.read_str(4)
 
         length = self.read_number(4)
 
+        if length + self.file.tell() > chunk_max_end:
+            length = chunk_max_end - self.file.tell()
+
         if header == "LIST":
             end = self.file.tell() + length
             type = self.read_str(4)
-            self.on_list_start(type)
-            children = []
-            while self.file.tell() < end:
-                children.append(self.read_chunk())
-            data = RiffList(type, tuple(children))
-            self.on_list_end(type)
+            if type in self.weird_lists:
+                data = StructuredData()
+                data.type = type
+                data.data = self.weird_lists[type](self, length-4)
+            else:
+                self.on_list_start(type)
+                children = []
+                while self.file.tell() < end:
+                    children.append(self.read_chunk(end))
+                data = RiffList(type, tuple(children))
+                self.on_list_end(type)
         elif header in self.chunk_parsers:
             data = self.chunk_parsers[header](self, length)
         else:
@@ -180,7 +191,7 @@ class RiffParser:
             if self.file.tell() >= self.end:
                 return
 
-            yield self.read_chunk()
+            yield self.read_chunk(self.end)
 
     def on_chunk(self, chunk):
         pass
@@ -195,7 +206,7 @@ class RiffParser:
         end = self.file.tell() + length
         children = []
         while self.file.tell() < end:
-            children.append(self.read_chunk())
+            children.append(self.read_chunk(end))
         return RiffList("", tuple(children))
 
     def parse(self):
@@ -249,7 +260,13 @@ class StructuredReader:
         return raw
 
     def read_string0(self, length):
-        read = self.read_raw(length).rstrip(b"\0")
+        read = self.read_raw(length)
+
+        try:
+            read = read[:read.index(b'\0')]
+        except ValueError:
+            pass
+
         try:
             return read.decode("utf8")
         except UnicodeDecodeError:
@@ -367,6 +384,7 @@ class AepParser(RiffParser):
             "tdsn": RiffParser.read_sub_chunks,
             "fnam": RiffParser.read_sub_chunks,
             "Utf8": AepParser.read_utf8,
+            "alas": AepParser.read_utf8,
             "tdmn": AepParser.read_mn,
             "cdta": AepParser.read_cdta,
             "ldta": AepParser.read_ldta,
@@ -405,6 +423,9 @@ class AepParser(RiffParser):
             "otda": AepParser.read_otda,
             "opti": AepParser.read_opti,
             "sspc": AepParser.read_sspc,
+        }
+        self.weird_lists = {
+            "btdk": RiffParser.read,
         }
         self.prop_dimension = None
         self.list_type = ListType.Other
@@ -474,6 +495,8 @@ class AepParser(RiffParser):
             self.keyframe_type = KeyframeType.Color
         elif data.special:
             self.keyframe_type = KeyframeType.NoValue
+        else:
+            self.keyframe_type = KeyframeType.MultiDimensional
 
         return data
 
@@ -607,12 +630,13 @@ class AepParser(RiffParser):
     def read_ldat_keyframe_no_value(self, length):
         reader = self.read_ldat_keyframe_common(length)
         reader.skip(8)
-        reader.read_attribute("", 8, float)
-        reader.read_attribute("in_speed", 8, float)
-        reader.read_attribute("in_influence", 8, float)
-        reader.read_attribute("out_speed", 8, float)
-        reader.read_attribute("out_influence", 8, float)
-        reader.skip(8)
+        if reader.to_read >= 8 * 6:
+            reader.read_attribute("", 8, float)
+            reader.read_attribute("in_speed", 8, float)
+            reader.read_attribute("in_influence", 8, float)
+            reader.read_attribute("out_speed", 8, float)
+            reader.read_attribute("out_influence", 8, float)
+            reader.skip(8)
         reader.finalize()
         return reader.value
 
@@ -709,8 +733,18 @@ class AepParser(RiffParser):
                 return xml_value_to_python(dom)
             else:
                 return dom
-        else:
-            return data
+        elif data.startswith("{") and data.endswith("}"):
+            try:
+                jdata = json.loads(data)
+                if "baseColorProfile" in jdata:
+                    jdata["baseColorProfile"]["colorProfileData"] = ImageCms.ImageCmsProfile(io.BytesIO(
+                        base64.b64decode(jdata["baseColorProfile"]["colorProfileData"])
+                    ))
+                return jdata
+            except Exception:
+                pass
+
+        return data
 
     def read_utf16(self, length):
         return self.read(length).decode("utf16")
@@ -725,12 +759,14 @@ class AepParser(RiffParser):
 
     def read_opti(self, length):
         reader = StructuredReader(self, length)
-        reader.skip(10)
-        reader.read_attribute("a", 4, float)
-        reader.read_attribute("r", 4, float)
-        reader.read_attribute("g", 4, float)
-        reader.read_attribute("b", 4, float)
-        reader.read_attribute_string0("name", 256)
+        reader.read_attribute("type", 4, str)
+        if reader.value.type == "Soli":
+            reader.skip(6)
+            reader.read_attribute("a", 4, float)
+            reader.read_attribute("r", 4, float)
+            reader.read_attribute("g", 4, float)
+            reader.read_attribute("b", 4, float)
+            reader.read_attribute_string0("name", 256)
         reader.finalize()
         return reader.value
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-
 import os
 import sys
+import enum
 import argparse
 from xml.etree import ElementTree
 from PIL import ImageCms
@@ -12,25 +12,27 @@ sys.path.insert(0, os.path.join(
 from lottie.importers.aep import RiffList, StructuredData, AepParser, aepx_to_chunk
 
 
-def format_bytes(val, hex_bytes):
-    if hex_bytes:
+def format_bytes(val, bytes_fmt):
+    if bytes_fmt == ByteOutputMode.Hex:
         return " ".join("%02x" % c for c in val)
+    elif bytes_fmt == ByteOutputMode.HexChar:
+        return " ".join(chr(c) + " " if 32 <= c <= 126 else "%02x" % c  for c in val)
 
     naked = str(val)[2:-1]
     naked = naked.replace(r'"', r'\"')
     return "\"%s\"" % naked
 
 
-def value_to_yaml(val, wrap_bytes, hex_bytes, indent):
+def value_to_yaml(val, wrap_bytes, bytes_fmt, indent):
     if isinstance(val, bytes):
         if len(val) <= wrap_bytes:
-            return format_bytes(val, hex_bytes)
+            return format_bytes(val, bytes_fmt)
         formatted = ""
         for i in range(0, len(val), wrap_bytes):
             if i == 0:
-                formatted += format_bytes(val[0:wrap_bytes], hex_bytes) + "\n"
+                formatted += format_bytes(val[0:wrap_bytes], bytes_fmt) + "\n"
             else:
-                formatted += indent + format_bytes(val[i:i+wrap_bytes], hex_bytes) + "\n"
+                formatted += indent + format_bytes(val[i:i+wrap_bytes], bytes_fmt) + "\n"
         return formatted[:-1]
     elif isinstance(val, ImageCms.ImageCmsProfile):
         return ImageCms.getProfileName(val).strip()
@@ -38,17 +40,17 @@ def value_to_yaml(val, wrap_bytes, hex_bytes, indent):
     return val
 
 
-def chunk_to_yaml(chunk, wrap_bytes, hex_bytes, indp=""):
+def chunk_to_yaml(file, chunk, wrap_bytes, bytes_fmt, indp=""):
     ind = indp + ("- " if indp else "")
     if isinstance(chunk.data, RiffList):
-        print("%s%s: %s" % (ind, chunk.header, chunk.data.type))
+        file.write("%s%s: %s\n" % (ind, chunk.header, chunk.data.type))
         for sub in chunk.data.children:
-            chunk_to_yaml(sub, wrap_bytes, hex_bytes, indp + "    ")
+            chunk_to_yaml(file, sub, wrap_bytes, bytes_fmt, indp + "    ")
     else:
-        structured_value_to_yaml(chunk.header, chunk.data, wrap_bytes, hex_bytes, indp)
+        structured_value_to_yaml(file, chunk.header, chunk.data, wrap_bytes, bytes_fmt, indp)
 
 
-def structured_value_to_yaml(title, value, wrap_bytes, hex_bytes, indp):
+def structured_value_to_yaml(file, title, value, wrap_bytes, bytes_fmt, indp):
     ind = indp + ("- " if indp else "")
     items = []
 
@@ -68,12 +70,18 @@ def structured_value_to_yaml(title, value, wrap_bytes, hex_bytes, indp):
         print_data = value
 
     if title:
-        print("%s%s: %s" % (ind, title, value_to_yaml(print_data, wrap_bytes, hex_bytes, indp + " " * (4+len(title)))))
+        file.write("%s%s: %s\n" % (ind, title, value_to_yaml(print_data, wrap_bytes, bytes_fmt, indp + " " * (4+len(title)))))
     else:
-        print("%s%s" % (ind, value_to_yaml(print_data, wrap_bytes, hex_bytes, indp + "  ")))
+        file.write("%s%s\n" % (ind, value_to_yaml(print_data, wrap_bytes, bytes_fmt, indp + "  ")))
 
     for k, v in items:
-        structured_value_to_yaml("" if k.startswith("_") else k, v, wrap_bytes, hex_bytes, indp + "    ")
+        structured_value_to_yaml(file, "" if k.startswith("_") else k, v, wrap_bytes, bytes_fmt, indp + "    ")
+
+
+class ByteOutputMode(enum.Enum):
+    String = "string"
+    Hex = "hex"
+    HexChar = "hex-char"
 
 
 parser = argparse.ArgumentParser(
@@ -97,9 +105,15 @@ parser.add_argument(
 )
 parser.add_argument(
     "--bytes", "-b",
-    choices=["hex", "string"],
+    choices=ByteOutputMode.__members__.values(),
     help="Raw data mode",
-    default="hex",
+    default=ByteOutputMode.Hex,
+    type=ByteOutputMode,
+)
+
+parser.add_argument(
+    "--output", "-o",
+    help="Output file name"
 )
 
 args = parser.parse_args()
@@ -116,9 +130,10 @@ with open(args.infile, "rb") as f:
         aep_parser = AepParser(None)
         root = aepx_to_chunk(dom.getroot(), aep_parser)
 
-    for chunk in root.data.children:
-        chunk_to_yaml(chunk, args.wrap_bytes, args.bytes == "hex")
+    with open(args.output or os.path.splitext(args.infile)[0]+".yml", "w") as of:
+        for chunk in root.data.children:
+            chunk_to_yaml(of, chunk, args.wrap_bytes, args.bytes)
 
-    if args.xmp:
-        print("ProjectXMPMetadata: _")
-        print(f.read().decode("utf8"))
+        if args.xmp:
+            of.write("ProjectXMPMetadata: _\n")
+            of.write(f.read().decode("utf8"))
