@@ -369,6 +369,8 @@ def shape_with_defaults(cls, **defaults):
 
 
 class AepParser(RiffParser):
+    utf8_containers = ["tdsn", "fnam", "pdnm"]
+
     def __init__(self, file):
         if file is not None:
             super().__init__(file)
@@ -381,8 +383,6 @@ class AepParser(RiffParser):
             self.endian = BigEndian()
 
         self.chunk_parsers = {
-            "tdsn": RiffParser.read_sub_chunks,
-            "fnam": RiffParser.read_sub_chunks,
             "Utf8": AepParser.read_utf8,
             "alas": AepParser.read_utf8,
             "tdmn": AepParser.read_mn,
@@ -423,7 +423,11 @@ class AepParser(RiffParser):
             "otda": AepParser.read_otda,
             "opti": AepParser.read_opti,
             "sspc": AepParser.read_sspc,
+            "parn": AepParser.read_number,
+            "pard": AepParser.read_pard,
         }
+        for ch in self.utf8_containers:
+            self.chunk_parsers[ch] = RiffParser.read_sub_chunks
         self.weird_lists = {
             "btdk": RiffParser.read,
         }
@@ -791,6 +795,14 @@ class AepParser(RiffParser):
         reader.read_attribute("width", 2, int)
         reader.skip(2)
         reader.read_attribute("height", 2, int)
+        reader.finalize()
+        return reader.value
+
+    def read_pard(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(15)
+        reader.read_attribute("type", 1, int)
+        reader.read_attribute_string0("name", 32)
         reader.finalize()
         return reader.value
 
@@ -1191,7 +1203,7 @@ def aepx_to_chunk(element, parser):
         if header == "AfterEffectsProject":
             header = "RIFX"
             type = ""
-        elif header in ["tdsn", "fnam"]:
+        elif header in AepParser.utf8_containers:
             type = ""
         else:
             type = header
