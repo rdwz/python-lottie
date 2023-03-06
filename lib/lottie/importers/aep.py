@@ -564,10 +564,16 @@ class AepParser(RiffParser):
         reader.skip(20)
         # 64
         reader.read_attribute_string0("name", 32)
+        # 96
+        reader.skip(35)
+        # 131
+        reader.read_attribute("type", 1, int)
+
 
         reader.finalize()
 
         reader.attr_bit("ddd", 1, 2)
+        reader.attr_bit("null", 1, 7)
         reader.attr_bit("motion_blur", 2, 3)
         reader.attr_bit("effects", 2, 2)
         reader.attr_bit("locked", 2, 5)

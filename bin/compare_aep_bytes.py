@@ -272,7 +272,7 @@ class GatherLdta:
         else:
             for sub in chunk.data.children:
                 if sub.header == "LIST":
-                    self.gather(sub, data, const)
+                    self.gather(filename, sub, data, const)
 
     def gather_assets(self, chunk):
         if chunk.header == "LIST" and chunk.data.type == "Item":
