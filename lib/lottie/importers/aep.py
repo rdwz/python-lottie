@@ -1,4 +1,5 @@
 import io
+import os
 import enum
 import json
 import struct
@@ -989,7 +990,6 @@ class AepConverter:
         Solid = enum.auto()
         Image = enum.auto()
 
-
     class ParsedAsset:
         def __init__(self, id, name, type, block, data):
             self.id = id
@@ -1217,7 +1217,6 @@ class AepConverter:
             id = self.comps[name]
 
         return self.item_chunk_to_animation(self.assets[id].block)
-
 
 
 @importer("AfterEffect Project", ["aep"], [
