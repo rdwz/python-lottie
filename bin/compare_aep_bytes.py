@@ -146,7 +146,12 @@ class CommonBytes:
         return diff
 
 
-class GatherTdb4:
+class Gatherer:
+    def process(self, filename, parser, data, const):
+        return self.gather(filename, parser.parse(), data, const)
+
+
+class GatherTdb4(Gatherer):
     default_group = ["category"]
 
     def gather(self, filename, chunk, data, const, mn=None, is_ef=False):
@@ -189,7 +194,7 @@ class GatherTdb4:
             data.add(Prop(tdb4, category=cat, animated=anim, mn=mn, filename=filename))
 
 
-class GatherSspc:
+class GatherSspc(Gatherer):
     default_group = ["type"]
 
     def gather(self, filename, chunk, data, const, type="??", name="??"):
@@ -218,7 +223,7 @@ class GatherSspc:
                     self.gather(filename, sub, data, const, type, name)
 
 
-class GatherLdta:
+class GatherLdta(Gatherer):
     default_group = ["type", "asset"]
 
     def tdgp_mns(self, tdgp):
@@ -290,7 +295,7 @@ class GatherLdta:
                     self.gather_assets(sub)
 
 
-class GatherRawTop:
+class GatherRawTop(Gatherer):
     def __init__(self, header):
         self.header = header
 
@@ -302,6 +307,54 @@ class GatherRawTop:
             data.add(Prop(chunk.data, filename=filename))
 
 
+class GatherLhd3(Gatherer):
+    default_group = ["type", "list"]
+
+    def process(self, filename, parser, data, const):
+        parser.keep_ldat_bytes = True
+        return self.gather(filename, parser.parse(), data, const)
+
+    def gather(self, filename, chunk, data, const, plist="", type="~dunno", mn="", kf="??"):
+        if not isinstance(chunk.data, RiffList):
+            return
+
+        for sub in chunk.data.children:
+            if sub.header == "tdmn":
+                mn = sub.data
+            elif sub.header == "LIST":
+                subtype = type
+                subkf = kf
+                if sub.data.type == "shap":
+                    subtype = "shape"
+                elif sub.data.type == "om-s":
+                    subkf = "shape"
+                elif sub.data.type == "GCst":
+                    subkf = "grad"
+
+                sub_pl = plist if sub.data.type == "list" else sub.data.type
+                self.gather(filename, sub, data, const, sub_pl, subtype, mn, subkf)
+            elif sub.header == "tdb4":
+                type = "key"
+                if kf == "??":
+                    kf = "multi"
+                    if sub.data.color:
+                        kf = "color"
+                    elif sub.data.position:
+                        kf = "pos"
+                    elif sub.data.special:
+                        kf = "special"
+                    kf += " %sD" % sub.data.components
+            elif sub.header == "lhd3":
+                const.add(sub.data.raw_bytes)
+                ptype = type
+                if type == "key":
+                    ptype += " " + kf
+                item_size = "?"
+                ldat = chunk.data.find("ldat")
+                if ldat:
+                    item_size = hex(len(ldat.data.raw_bytes) // sub.data.count)
+                data.add(Prop(sub.data.raw_bytes, list=plist, type=ptype, item_size=item_size, mn=mn, filename=filename))
+
 
 def group_by(items, axes, result):
     for prop in items:
@@ -309,8 +362,6 @@ def group_by(items, axes, result):
         if title not in result:
             result[title] = Group(title)
         result[title].add(prop)
-
-
 
 
 parser = argparse.ArgumentParser()
@@ -332,9 +383,7 @@ for infile in args.files:
     sys.stderr.write("%s\n" % infile)
     with open(infile, "rb") as f:
         aep_parser = AepParser(f)
-
-        for chunk in aep_parser:
-            gatherer.gather(base, chunk, data, const)
+        gatherer.process(base, aep_parser, data, const)
 
 const.finalize()
 

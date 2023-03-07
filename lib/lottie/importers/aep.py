@@ -435,6 +435,7 @@ class AepParser(RiffParser):
         self.list_type = ListType.Other
         self.keyframe_type = KeyframeType.MultiDimensional
         self.ldat_size = 0
+        self.keep_ldat_bytes = False
 
     def read_shph(self, length):
         reader = StructuredReader(self, length)
@@ -617,15 +618,18 @@ class AepParser(RiffParser):
         reader = StructuredReader(self, length)
         reader.skip(10)
         reader.read_attribute("count", 2, int)
-        self.ldat_size = reader.value.count
+        reader.skip(6)
+        reader.read_attribute("item_size", 2, int)
+        reader.skip(3)
+        reader.read_attribute("type", 1, int)
         reader.finalize()
+        self.ldat_size = reader.value.count
         return reader.value
 
     def read_ldat_item_bezier(self, length):
         reader = StructuredReader(self, length)
-        reader.read_attribute_array("vertex", 2, 4, float)
-        reader.read_attribute_array("tan_out", 2, 4, float)
-        reader.read_attribute_array("tan_in", 2, 4, float)
+        reader.read_attribute("x", 4, float)
+        reader.read_attribute("y", 4, float)
         reader.finalize()
         return reader.value
 
@@ -691,15 +695,13 @@ class AepParser(RiffParser):
 
     def read_ldat(self, length):
         item_func = None
-        group = 1
 
         if self.list_type == ListType.Other:
             item_func = self.read_ldat_item_raw
             array_name = "items"
         elif self.list_type == ListType.Shape:
             item_func = self.read_ldat_item_bezier
-            group = 3
-            array_name = "segments"
+            array_name = "points"
         elif self.list_type == ListType.Keyframe:
             array_name = "keyframes"
 
@@ -716,14 +718,20 @@ class AepParser(RiffParser):
 
             self.keyframe_type = KeyframeType.MultiDimensional
 
-        item_count = self.ldat_size // group
+        item_count = self.ldat_size
         item_size = length // item_count
         leftover = length % item_count
         value = StructuredData()
         items = []
 
         for i in range(item_count):
-            items.append(item_func(item_size))
+            item = item_func(item_size)
+            if self.keep_ldat_bytes:
+                if isinstance(item, bytes):
+                    value.raw_bytes += item
+                else:
+                    value.raw_bytes += item.raw_bytes
+            items.append(item)
 
         setattr(value, array_name, items)
 
@@ -976,9 +984,26 @@ class AepConverter:
         "ADBE Vector Scale": ("scale", None),
     }
 
+    class AssetType(enum.Enum):
+        Comp = enum.auto()
+        Solid = enum.auto()
+        Image = enum.auto()
+
+
+    class ParsedAsset:
+        def __init__(self, id, name, type, block, data):
+            self.id = id
+            self.name = name
+            self.block = block
+            self.data = data
+            self.parsed_object = None
+
     def __init__(self):
         self.time_mult = 1
         self.time_offset = 0
+        self.assets = {}
+        self.comps = {}
+        self.layers = {}
 
     def read_properties(self, object, chunk):
         match_name = None
@@ -1094,20 +1119,19 @@ class AepConverter:
         bottom_right = shph.data.bottom_right
         bez.closed = not shph.data.open
 
-        segments = list.data.find("ldat").data.segments
-        for i, seg in enumerate(segments):
-            vertex = self.absolute_bezier_point(top_left, bottom_right, seg.vertex)
-            bez.add_point(
-                vertex,
-                self.absolute_bezier_point(top_left, bottom_right, segments[(i-1) % len(segments)].tan_in) - vertex,
-                self.absolute_bezier_point(top_left, bottom_right, seg.tan_out) - vertex
-            )
+        points = list.data.find("ldat").data.points
+        for i in range(0, len(points), 3):
+            vertex = self.absolute_bezier_point(top_left, bottom_right, points[i])
+            tan_in = self.absolute_bezier_point(top_left, bottom_right, points[(i-1) % len(points)])
+            tan_ou = self.absolute_bezier_point(top_left, bottom_right, points[i+1])
+            print(i, vertex, tan_in, tan_ou)
+            bez.add_point(vertex, tan_in - vertex, tan_ou - vertex)
         return bez
 
     def absolute_bezier_point(self, tl, br, p):
         return NVector(
-            tl[0] * (1-p[0]) + br[0] * p[0],
-            tl[1] * (1-p[1]) + br[1] * p[1]
+            tl[0] * (1-p.x) + br[0] * p.x,
+            tl[1] * (1-p.y) + br[1] * p.y
         )
 
     def chunk_to_layer(self, chunk):
@@ -1152,16 +1176,48 @@ class AepConverter:
 
         return anim
 
-    def fold_chunk_extract_animation(self, fold, name):
+    def items_from_fold(self, fold):
         for chunk in fold.data.children:
-            if chunk.header == "LIST" and chunk.data.type == "Item" and chunk.data.find("idta").data.type == 4:
-                if name is None or name == chunk.data.find("Utf8").data:
-                    return self.item_chunk_to_animation(chunk)
+            if chunk.header == "LIST" and chunk.data.type == "Item":
+                item_data = chunk.data.find("idta").data
+                name = chunk.data.find("Utf8").data
+                if item_data.type == 1:
+                    self.items_from_fold(chunk)
+                    return
+                elif item_data.type == 4:
+                    type = self.AssetType.Comp
+                    self.comps[name] = item_data.id
+                    data = chunk.data.find("cdta").data
+                elif item_data.type == 7:
+                    pin = chunk.find("Pin ").data
+                    opti = pin.find("opti")
 
-    def import_aep(self, chunks, name):
-        for chunk in chunks:
-            if chunk.header == "LIST" and chunk.data.type == "Fold":
-                return self.fold_chunk_extract_animation(chunk, name)
+                    if opti.type == "Soli":
+                        type = self.AssetType.Solid
+                        name = name or opti.name
+                        data = opti
+                    else:
+                        type = self.AssetType.Image
+                        filename = pin.find("Als2").data.find("alas").data["fullpath"]
+                        name = name or os.path.basename(filename)
+                        sspc = pin.find("sspc").data
+                        data = {
+                            "width": sspc.width,
+                            "height": sspc.height,
+                            "filename": filename
+                        }
+
+                self.assets[item_data.id] = self.ParsedAsset(item_data.id, name, type, chunk, data)
+
+    def import_aep(self, top_level, name):
+        self.items_from_fold(top_level.data.find("Fold"))
+        if not name:
+            id = next(iter(self.comps.values()))
+        else:
+            id = self.comps[name]
+
+        return self.item_chunk_to_animation(self.assets[id].block)
+
 
 
 @importer("AfterEffect Project", ["aep"], [
@@ -1173,7 +1229,7 @@ def import_aep(file, comp=None):
             return import_aep(fileobj, comp)
 
     parser = AepParser(file)
-    return AepConverter().import_aep(parser, comp)
+    return AepConverter().import_aep(parser.parse(), comp)
 
 
 def aepx_to_chunk(element, parser):
@@ -1230,4 +1286,4 @@ def import_aepx(file, comp=None):
     dom = ElementTree.parse(file)
     parser = AepParser(None)
     rifx = aepx_to_chunk(dom.getroot(), parser)
-    return AepConverter().import_aep(rifx.data.children, comp)
+    return AepConverter().import_aep(rifx, comp)
