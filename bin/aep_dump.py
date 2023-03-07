@@ -13,10 +13,18 @@ from lottie.importers.aep import RiffList, StructuredData, AepParser, aepx_to_ch
 
 
 def format_bytes(val, bytes_fmt):
-    if bytes_fmt == ByteOutputMode.Hex:
+    if bytes_fmt == ByteOutputMode.Hex or (bytes_fmt == ByteOutputMode.HexChar and len(val) < 4):
         return " ".join("%02x" % c for c in val)
     elif bytes_fmt == ByteOutputMode.HexChar:
-        return " ".join(chr(c) + " " if 32 <= c <= 126 else "%02x" % c  for c in val)
+        char = ""
+        hex = []
+        for c in val:
+            hex.append("%02x" % c)
+            char += chr(c) if 32 <= c <= 126 else " "
+        hexs = " ".join(hex)
+        if char.strip():
+            hexs += " " + char.rstrip()
+        return hexs
 
     naked = str(val)[2:-1]
     naked = naked.replace(r'"', r'\"')
@@ -107,7 +115,7 @@ parser.add_argument(
     "--bytes", "-b",
     choices=ByteOutputMode.__members__.values(),
     help="Raw data mode",
-    default=ByteOutputMode.Hex,
+    default=ByteOutputMode.HexChar,
     type=ByteOutputMode,
 )
 

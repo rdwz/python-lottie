@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "lib"
 ))
-from lottie.importers.aep import RiffList, AepParser
+from lottie.parsers.aep.riff import RiffList
+from lottie.parsers.aep.aep_riff import AepParser
 
 mn_category = {
     "ADBE Marker": "marker",
@@ -147,8 +148,24 @@ class CommonBytes:
 
 
 class Gatherer:
+    def __init__(self, header):
+        self.header = header
+
     def process(self, filename, parser, data, const):
         return self.gather(filename, parser.parse(), data, const)
+
+
+class GenericGatherer(Gatherer):
+    default_group = []
+
+    def gather(self, filename, chunk, data, const, plist=""):
+        if isinstance(chunk.data, RiffList):
+            for sub in chunk.data.children:
+                self.gather(filename, sub, data, const, chunk.data.type or chunk.header)
+
+        elif chunk.header == self.header:
+            const.add(chunk.data)
+            data.add(Prop(chunk.data, list=plist, filename=filename))
 
 
 class GatherTdb4(Gatherer):
@@ -296,9 +313,6 @@ class GatherLdta(Gatherer):
 
 
 class GatherRawTop(Gatherer):
-    def __init__(self, header):
-        self.header = header
-
     default_group = []
 
     def gather(self, filename, chunk, data, const):
@@ -364,6 +378,16 @@ def group_by(items, axes, result):
         result[title].add(prop)
 
 
+
+gatherers = {
+    "head": GatherRawTop,
+    "svap": GatherRawTop,
+    "lhd3": GatherLhd3,
+    "tdb4": GatherTdb4,
+    "ldta": GatherLdta,
+    "sspc": GatherSspc,
+}
+
 parser = argparse.ArgumentParser()
 parser.add_argument("files", nargs="+")
 parser.add_argument("--what", "-w", default="tdb4")
@@ -373,10 +397,10 @@ args = parser.parse_args()
 # Gather Data
 data = set()
 const = CommonBytes()
-if args.what in ["head", "svap"]:
-    gatherer = GatherRawTop(args.what)
+if args.what in gatherers:
+    gatherer = gatherers[args.what](args.what)
 else:
-    gatherer = globals()["Gather" + args.what[0].upper() + args.what[1:]]()
+    gatherer = GenericGatherer(args.what)
 
 for infile in args.files:
     base = os.path.basename(infile)
