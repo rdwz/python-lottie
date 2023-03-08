@@ -10,6 +10,7 @@ from ...nvector import NVector
 
 from .riff import RiffParser, StructuredReader, BigEndian, StructuredData, sint
 from .gradient_xml import xml_value_to_python
+from .cos import CosParser
 
 
 class ListType(enum.Enum):
@@ -82,11 +83,12 @@ class AepParser(RiffParser):
             "sspc": AepParser.read_sspc,
             "parn": AepParser.read_number,
             "pard": AepParser.read_pard,
+            "btdk": AepParser.read_btdk,
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
         self.weird_lists = {
-            "btdk": RiffParser.read,
+            "btdk": AepParser.read_btdk,
         }
         self.prop_dimension = None
         self.list_type = ListType.Other
@@ -470,3 +472,7 @@ class AepParser(RiffParser):
         reader.read_attribute_string0("name", 32)
         reader.finalize()
         return reader.value
+
+    def read_btdk(self, length):
+        parser = CosParser(self.file, length)
+        return parser.parse()

@@ -9,7 +9,9 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "lib"
 ))
-from lottie.importers.aep import RiffList, StructuredData, AepParser, aepx_to_chunk
+from lottie.parsers.aep.riff import RiffList, StructuredData
+from lottie.parsers.aep.aep_riff import  AepParser
+from lottie.parsers.aep.aepx import aepx_to_chunk
 
 
 def format_bytes(val, bytes_fmt):
