@@ -25,6 +25,14 @@ class TokenType(enum.Enum):
     Null = enum.auto()
     # end of file
     Eof = enum.auto()
+    # obj
+    IndirectObjectStart = enum.auto()
+    # endobj
+    IndirectObjectEnd = enum.auto()
+    # R
+    IndirectReference = enum.auto()
+    # stream...endstream
+    Stream = enum.auto()
 
 
 class Token:
@@ -32,9 +40,36 @@ class Token:
         self.type = type
         self.value = value
 
+    def __str__(self):
+        return "(%s, %s)" % (self.type.name, self.value)
+
+    def __repr__(self):
+        return "<Token %s>" % self
+
+
+import dataclasses
+
+@dataclasses.dataclass
+class IndirectObject:
+    object_number: int
+    generation_number: int
+    data: dict
+
+
+@dataclasses.dataclass
+class IndirectReference:
+    object_number: int
+    generation_number: int
+
+
+@dataclasses.dataclass
+class Stream:
+    dictionary: dict
+    data: bytes
+
 
 class CosParser:
-    def __init__(self, file, max_pos):
+    def __init__(self, file, max_pos=None):
         self.file = file
         self.max_pos = max_pos
         self.lookahead = None
@@ -44,29 +79,54 @@ class CosParser:
         self.lex()
         if self.lookahead.type == TokenType.Identifier:
             return self.parse_dict_content()
-        return self.parse_value()
+
+        val = self.parse_value()
+        if self.lookahead.type == TokenType.Eof:
+            return val
+
+        return [val] + self.parse_array_content()
 
     def parse_value(self):
         if (
             self.lookahead.type == TokenType.String or
-            self.lookahead.type == TokenType.Number or
             self.lookahead.type == TokenType.HexString or
             self.lookahead.type == TokenType.Null or
             self.lookahead.type == TokenType.Boolean or
-            self.lookahead.type == TokenType.Identifier
+            self.lookahead.type == TokenType.Identifier or
+            self.lookahead.type == TokenType.Stream
         ):
             val = self.lookahead.value
             self.lex()
             return val
 
-        if self.lookahead.type == TokenType.Eof:
-            raise SyntaxError("Expected COS value")
+        if self.lookahead.type == TokenType.Number:
+            val = self.lookahead.value
+            self.lex()
+            if self.lookahead.type == TokenType.Number:
+                gen = self.lookahead.value
+                state = self.save_state()
+                self.lex()
+                if self.lookahead.type == TokenType.IndirectObjectStart:
+                    self.lex()
+                    data = self.parse_value()
+                    self.expect(TokenType.IndirectObjectEnd)
+                    self.lex()
+                    return IndirectObject(val, gen, data)
+                elif self.lookahead.type == TokenType.IndirectReference:
+                    self.lex()
+                    return IndirectReference(val, gen)
+                else:
+                    self.restore_state(state)
+            return val
 
         if self.lookahead.type == TokenType.ObjectStart:
             self.lex()
             val = self.parse_dict_content()
             self.expect(TokenType.ObjectEnd)
             self.lex()
+            if self.lookahead.type == TokenType.Stream:
+                val = Stream(val, self.lookahead.value)
+                self.lex()
             return val
 
         if self.lookahead.type == TokenType.ArrayStart:
@@ -75,6 +135,15 @@ class CosParser:
             self.expect(TokenType.ArrayEnd)
             self.lex()
             return val
+
+        raise SyntaxError("Expected COS value, got %s" % self.lookahead)
+
+    def save_state(self):
+        return (self.max_pos, self.file.tell(), self.lookahead)
+
+    def restore_state(self, state):
+        self.max_pos, pos, self.lookahead = state
+        self.file.seek(pos)
 
     def parse_dict_content(self):
         value = {}
@@ -98,9 +167,23 @@ class CosParser:
             value.append(self.parse_value())
         return value
 
+    def parse_indirect(self, object_number, generation_number):
+        self.lex()
+        if self.lookahead.type == TokenType.IndirectObjectStart:
+            self.lex()
+            data = self.parse_value()
+            self.expect(TokenType.IndirectObjectEnd)
+            self.lex()
+            return IndirectObject(object_number, generation_number, data)
+        elif self.lookahead.type == TokenType.IndirectReference:
+            self.lex()
+            return IndirectReference(object_number, generation_number)
+        else:
+            raise SyntaxError("Expected `obj` or `R`, got %s" % self.lookahead)
+
     def expect(self, token_type):
         if self.lookahead.type != token_type:
-            raise SyntaxError("Expected %s, got %s" % (token_type, self.lookahead.type))
+            raise SyntaxError("Expected %s, got %s" % (token_type, self.lookahead))
 
     def lex(self):
         self.lookahead = self.lex_token()
@@ -169,7 +252,10 @@ class CosParser:
         raise SyntaxError(msg)
 
     def get_char(self):
-        if self.max_pos is not None and self.max_pos <= 0:
+        if self.max_pos is None:
+            return self.file.read(1)
+
+        if self.max_pos <= 0:
             return None
 
         char = self.file.read(1)
@@ -178,7 +264,8 @@ class CosParser:
 
     def unget(self):
         self.file.seek(-1, io.SEEK_CUR)
-        self.max_pos += 1
+        if self.max_pos is not None:
+            self.max_pos += 1
 
     # Skip until newline
     def lex_comment(self):
@@ -241,8 +328,38 @@ class CosParser:
             return Token(TokenType.Boolean, False)
         elif kw == b"null":
             return Token(TokenType.Boolean, None)
+        elif kw == b"obj":
+            return Token(TokenType.IndirectObjectStart)
+        elif kw == b"endobj":
+            return Token(TokenType.IndirectObjectEnd)
+        elif kw == b"R":
+            return Token(TokenType.IndirectReference)
+        elif kw == b"stream":
+            return self.lex_stream()
+        elif kw == b"xref":
+            return Token(TokenType.Eof)
         else:
             raise SyntaxError("Unknown keyword %s" % kw)
+
+    def lex_stream(self):
+        char = self.get_char()
+        if char == b'\r':
+            if self.get_char() != b'\n':
+                raise SyntaxError("Invalid newline")
+        elif char != b'\n':
+            raise SyntaxError("Expected newline after `stream`")
+
+        stream = b''
+        marker = b'endstream'
+        while True:
+            char = self.get_char()
+            if char is None:
+                raise SyntaxError("Unterminated stream")
+            stream += char
+            if stream.endswith(marker):
+                break
+
+        return Token(TokenType.Stream, stream[:-len(marker)])
 
     def lex_string(self):
         string = b''
@@ -352,6 +469,7 @@ class CosParser:
 
     def lex_identifier(self):
         ident = ""
+        special = b'()[]<>{}/%'
         while True:
             char = self.get_char()
             if char is None:
@@ -367,6 +485,9 @@ class CosParser:
                         raise SyntaxError("Invalid identifier")
                     hexstr += char
                 ident += chr(int(hexstr, 16))
+            elif char in special:
+                self.unget()
+                break
             else:
                 ident += chr(char[0])
 
