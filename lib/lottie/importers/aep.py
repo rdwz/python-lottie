@@ -9,7 +9,6 @@ from ..parsers.aep.converter import AepConverter
 from ..parsers.aep.aepx import aepx_to_chunk
 
 
-
 @importer("AfterEffect Project", ["aep"], [
     ExtraOption("comp", help="Name of the composition to extract", default=None)
 ], slug="aep")

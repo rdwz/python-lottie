@@ -298,4 +298,3 @@ class StructuredReader:
 
     def attr_bit(self, name, byte, bit, attr="attrs"):
         setattr(self.value, name, (getattr(self.value, attr)[byte] & (1 << bit)) != 0)
-

@@ -4,6 +4,7 @@ import enum
 from ... import objects
 from ...nvector import NVector
 from ...utils.color import Color
+from .gradient_xml import parse_gradient_xml
 
 
 def convert_value_color(arr):

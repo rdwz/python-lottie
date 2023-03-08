@@ -1,6 +1,7 @@
 import io
 import enum
 
+
 class TokenType(enum.Enum):
     # /foo
     Identifier = enum.auto()
