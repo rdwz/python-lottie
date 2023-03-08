@@ -1,5 +1,6 @@
 import io
 import enum
+import dataclasses
 
 
 class TokenType(enum.Enum):
@@ -46,8 +47,6 @@ class Token:
     def __repr__(self):
         return "<Token %s>" % self
 
-
-import dataclasses
 
 @dataclasses.dataclass
 class IndirectObject:
