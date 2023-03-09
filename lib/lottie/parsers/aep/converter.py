@@ -450,13 +450,13 @@ class AepConverter:
             tl[1] * (1-p.y) + br[1] * p.y
         )
 
-    def load_effect_values(self, effect):
+    def load_effect_values(self, effect, chunk):
         for index, tdbs in enumerate(chunk.data.find_all("tdbs")):
             if index == 0:
                 continue
             policy = PropertyPolicyMultidim()
             prop = effect.effects[index-1].value
-            self.parse_property_tbds(item, prop, policy)
+            self.parse_property_tbds(tdbs, prop, policy)
 
     def load_effects(self, layer: objects.layers.VisualLayer, chunk):
         mn = None
@@ -464,7 +464,7 @@ class AepConverter:
 
         for item in chunk.data.children:
             if item.header == "tdmn":
-                match_name = item.data
+                mn = item.data
             elif item.header == "LIST" and item.data.type == "sspc":
                 effect = self.effects[mn].clone()
                 self.load_effect_values(effect, item.data.find("tdgp"))
@@ -577,25 +577,29 @@ class AepConverter:
 
             if match in self.effect_match_names:
                 effect = self.effect_match_names()
-                effect.match_name = match
-                self.effects[match] = effect
-                continue
+                effect.name = params.data.find("fnam").data.find("Utf8").data
+            else:
+                effect = objects.effects.CustomEffect()
+                index = 0
+                mn = None
+                for chunk in params.data.children:
+                    if chunk.header == "tdmn":
+                        mn = chunk.data
+                    elif chunk.header == "fnam":
+                        effect.name = chunk.data.find("Utf8").data
+                    elif chunk.header == "LIST" and chunk.data.type == "parT":
+                        index += 1
+                        if index == 1:
+                            continue
+                        pard = chunk.data.find("pard").data
+                        type = pard.value
+                        val = self.effect_value_types.get(type, objects.effects.EffectNoValue)()
+                        val.match_name = mn
+                        val.name = pard.name
+                        effect.effects.append(val)
 
-            effect = objects.effects.CustomEffect()
             effect.match_name = match
             self.effects[match] = effect
-            index = 0
-            mn = None
-            for chunk in definition.data.children:
-                if chunk.header == "tdmn":
-                    mn = chunk.data
-                elif chunk.header == "LIST" and chunk.data.type == "sspc":
-                    index += 1
-                    if index == 1:
-                        continue
-                    type = chunk.data.find("pard").value
-                    val = self.effect_value_types.get(type, objects.effects.EffectNoValue)()
-                    effect.effects.append(val)
 
     def process(self, top_level):
         fold, effects = top_level.data.find("Fold", "EfdG")
