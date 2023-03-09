@@ -46,6 +46,8 @@ def parse_gradient_xml(gradient, colors_prop):
 
     data = gradient["Gradient Color Data"]
 
+    # TODO handle that weird stop[1] data
+
     for stop in data["Color Stops"]["Stops List"].values():
         colors = stop["Stops Color"]
         flat += [colors[0], colors[2], colors[3], colors[4]]

@@ -50,6 +50,101 @@ class PropertyPolicyPrepared:
         return self.values[index]
 
 
+class Asset:
+    def __init__(self, id, name, chunk):
+        self.id = id
+        self.name = name
+        self.chunk = chunk
+
+    def load(self, converter):
+        pass
+
+    @property
+    def lottie_id(self):
+        return "asset_%s" % self.id
+
+
+class FileAsset(Asset):
+    def __init__(self, id, name, chunk, pin):
+        super().__init__(id, name, chunk)
+        self.filename = pin.find("Als2").data.find("alas").data["fullpath"]
+        if not self.name:
+            self.name = os.path.basename(filename)
+        sspc = pin.find("sspc").data
+        self.width = sspc.width
+        self.height = sspc.height
+
+    def to_lottie(self):
+        # TODO use plain FileAsset if not an image
+        asset = objects.assets.Image("asset_%s" % self.id)
+        asset.width = self.width
+        asset.height = self.height
+        asset.path = os.path.dirname(self.filename)
+        asset.file_name = os.path.basename(self.filename)
+        return asset
+
+
+class SolidAsset(Asset):
+    def __init__(self, id, name, chunk, cdta, opti):
+        super().__init__(id, name or opti.name, chunk)
+        self.color = Color(opti.r, opti.g, opti.b, opti.a)
+
+class Comp(Asset):
+    def __init__(self, id, name, chunk, cdta):
+        super().__init__(id, name, chunk)
+        self.cdta = cdta
+        self.name = ""
+        self.layers = None
+        self.used_assets = set()
+
+    @property
+    def lottie_id(self):
+        return "precomp_%s" % self.id
+
+    @property
+    def width(self):
+        return self.cdta.width
+
+    @property
+    def height(self):
+        return self.cdta.height
+
+    @property
+    def time_scale(self):
+        return self.cdta.time_scale
+
+    def to_main(self):
+        anim = objects.animation.Animation()
+        anim.name = self.name
+        anim.width = self.cdta.width
+        anim.height = self.cdta.height
+        anim.frame_rate = self.cdta.frame_rate
+        anim.in_point = self.cdta.start_time * self.cdta.time_scale
+        if self.cdta.end_time == 0xffff:
+            anim.out_point = self.cdta.comp_duration * self.cdta.time_scale
+        else:
+            anim.out_point = self.cdta.end_time * self.cdta.time_scale
+        anim.layers = self.layers
+
+        for asset in self.used_assets:
+            anim.assets = [a.to_lottie() for a in self.used_assets]
+
+        return anim
+
+    def to_precomp(self):
+        anim = objects.assets.Precomp()
+        anim.name = self.name
+        anim.id = self.lottie_id
+        anim.frame_rate = self.cdta.frame_rate
+        anim.layers = self.layers
+        return anim
+
+    def load(self, converter):
+        if self.layers is None:
+            self.layers = []
+            converter.load_comp(self)
+
+
 class AepConverter:
     placeholder = "-_0_/-"
     shapes = {
@@ -87,6 +182,7 @@ class AepConverter:
     }
     properties = {
         "ADBE Time Remapping": ("time_remapping", None),
+        "ADBE Camera Aperture": ("perspective", None),
 
         "ADBE Vector Shape": ("shape", None),
         "ADBE Vector Shape Direction": ("direction", objects.shapes.ShapeDirection),
@@ -160,19 +256,16 @@ class AepConverter:
         "ADBE Vector Group Opacity": ("opacity", None),
         "ADBE Vector Scale": ("scale", None),
     }
-
-    class AssetType(enum.Enum):
-        Comp = enum.auto()
-        Solid = enum.auto()
-        Image = enum.auto()
-
-    class ParsedAsset:
-        def __init__(self, id, name, type, block, data):
-            self.id = id
-            self.name = name
-            self.block = block
-            self.data = data
-            self.parsed_object = None
+    property_groups = {
+        "ADBE Camera Options Group": ["", None],
+        "ADBE Text Properties": ["data", None],
+        "ADBE Effect Parade": ["effects", "load_effects"],
+        "ADBE Transform Group": ["transform", None],
+        "ADBE Vector Transform Group": ["transform", None],
+        "ADBE Vector Stroke Dashes": ["dashes", "load_dashes"],
+        "ADBE Text Path Options": ["masked_path", None],
+        "ADBE Text More Options": ["more_options", None],
+    }
 
     def __init__(self):
         self.time_mult = 1
@@ -202,6 +295,9 @@ class AepConverter:
             # Shape property
             elif item.header == "LIST" and item.data.type == "om-s":
                 self.parse_property_shape(object, match_name, item)
+            # Gradient color property
+            elif item.header == "LIST" and item.data.type == "GCst":
+                self.parse_property_gradient(object, match_name, item)
             # Sub-object
             elif item.header == "LIST" and item.data.type == "tdgp":
                 if match_name == "ADBE Vectors Group" or match_name == "ADBE Root Vectors Group":
@@ -213,16 +309,6 @@ class AepConverter:
                     object.add_shape(child)
                     child.match_name = match_name
                     self.read_properties(child, item)
-            # Gradients
-            elif item.header == "LIST" and item.data.type == "GCst" and match_name == "ADBE Vector Grad Colors":
-                prop = object.colors.colors
-                for i, grad in enumerate(item.data.find_list("GCky").data.children):
-                    if grad.header == "Utf8":
-                        if not prop.animated:
-                            prop.value = parse_gradient_xml(grad.data, object.colors)
-                            break
-                        elif len(prop.keyframes) < i:
-                            prop.keyframes[i].value = parse_gradient_xml(grad.data, object.colors)
 
     def parse_property_multidimensional(self, object, match_name, chunk):
         meta = self.properties.get(match_name)
@@ -287,6 +373,22 @@ class AepConverter:
             if item.header == "LIST" and item.data.type == "shap":
                 policy.values.append(self.parse_shape_shap(item))
 
+    def parse_property_gradient(self, object, match_name, chunk):
+        meta = self.properties.get(match_name)
+        if not meta:
+            return
+
+        prop = object.colors.colors
+
+        policy = PropertyPolicyPrepared([])
+        tbds, keys = chunk.data.find_multiple("tdbs", "GCky")
+
+        for item in keys.data.children:
+            if item.header == "Utf8":
+                policy.values.append(parse_gradient_xml(item.data, object.colors))
+
+        self.parse_property_tbds(tbds, prop, policy)
+
     def parse_shape_shap(self, chunk):
         bez = objects.bezier.Bezier()
         shph, list = chunk.data.find_multiple("shph", "list")
@@ -310,49 +412,91 @@ class AepConverter:
             tl[1] * (1-p.y) + br[1] * p.y
         )
 
+    def create_asset_layer(self, ldta):
+        asset = self.assets[ldta.source_id]
+        if isinstance(asset, Comp):
+            layer = objects.layers.PreCompLayer()
+            layer.reference_id = asset.lottie_id
+            return layer
+        elif isinstance(asset, SolidAsset):
+            layer = objects.layers.SolidColorLayer()
+            layer.color = asset.color
+        elif asset.width > 0 and asset.height > 0:
+            layer = objects.layers.ImageLayer()
+            layer.reference_id = asset.lottie_id
+        else:
+            layer = objects.layers.AudioLayer()
+            layer.reference_id = asset.lottie_id
+
+        layer.width = asset.width
+        layer.height = asset.height
+        layer.name = asset.name
+        return layer
+
     def chunk_to_layer(self, chunk):
-        lottie_obj = objects.layers.ShapeLayer()
-        lottie_obj.transform.position.value = NVector(self.anim.width / 2, self.anim.height / 2)
-
+        name = None
+        layer = None
         for item in chunk.data.children:
             if item.header == "Utf8":
-                lottie_obj.name = item.data
+                if item.data:
+                    layer.name = item.data
             elif item.header == "ldta":
+                # Asset layer
+                if item.data.type == 0:
+                    if item.data.null:
+                        layer = objects.layers.NullLayer()
+                    else:
+                        layer = self.create_asset_layer(item)
+                # Light Layer
+                elif item.data.type == 1:
+                    return None
+                # Camera Layer
+                elif item.data.type == 2:
+                    layer = objects.layers.CameraLayer()
+                elif item.data.type == 3:
+                    layer = objects.layers.TextLayer()
+                elif item.data.type == 4:
+                    layer = objects.layers.ShapeLayer()
+
+                layer.name = name
+                if isinstance(layer, objects.layers.VisualLayer):
+                    layer.transform.position.value = NVector(self.anim.width / 2, self.anim.height / 2)
+                    if item.data.parent_id:
+                        layer.parent_index = item.data.parent_id
                 self.time_offset = item.data.start_time
-                lottie_obj.start_time = self.time_offset * self.time_mult
-                lottie_obj.in_point = self.time(item.data.in_time)
-                lottie_obj.out_point = self.time(item.data.out_time)
-                lottie_obj.threedimensional = item.data.ddd
-                lottie_obj.hidden = not item.data.visible
+                layer.start_time = self.time_offset * self.time_mult
+                layer.in_point = self.time(item.data.in_time)
+                layer.out_point = self.time(item.data.out_time)
+                layer.threedimensional = item.data.ddd
+                layer.hidden = not item.data.visible
+                layer.index = item.data.id
+
             elif item.header == "LIST":
-                self.read_properties(lottie_obj, item)
+                self.read_properties(layer, item)
 
-        return lottie_obj
+        return layer
 
-    def item_chunk_to_animation(self, chunk):
-        anim = objects.Animation()
-        self.anim = anim
+    def load_comp(self, comp: Comp):
+        self.anim = comp
+        self.time_mult = 1 / comp.time_scale
+        self.time_offset = 0
 
-        for item in chunk.data.children:
-            if item.header == "Utf8":
-                anim.name = item.data
-            elif item.header == "cdta":
-                anim.width = item.data.width
-                anim.height = item.data.height
-                anim.frame_rate = item.data.frame_rate
-                self.time_mult = 1 / item.data.time_scale
-                self.time_offset = 0
-                anim.in_point = self.time(item.data.start_time)
-                if item.data.end_time == 0xffff:
-                    anim.out_point = self.time(item.data.comp_duration)
-                else:
-                    anim.out_point = self.time(item.data.end_time)
-            elif item.header == "LIST" and item.data.type == "Layr":
-                anim.layers.append(self.chunk_to_layer(item))
+        for item in comp.chunk.data.children:
+            if item.header == "LIST" and item.data.type == "Layr":
+                layer = self.chunk_to_layer(item)
+                if layer:
+                    comp.layers.append(layer)
 
-        return anim
+        return comp
 
-    def items_from_fold(self, fold):
+    def item_to_comp(self, chunk, item_data):
+        type = self.AssetType.Comp
+        self.comps[name] = Comp(item_data.id, chunk)
+        data = chunk.data.find("cdta").data
+        name = chunk.data.find("Utf8").data
+        self.assets[item_data.id] = self.ParsedAsset(item_data.id, name, type, chunk, data)
+
+    def collect_assets(self, fold):
         for chunk in fold.data.children:
             if chunk.header == "LIST" and chunk.data.type == "Item":
                 item_data = chunk.data.find("idta").data
@@ -361,35 +505,27 @@ class AepConverter:
                     self.items_from_fold(chunk)
                     return
                 elif item_data.type == 4:
-                    type = self.AssetType.Comp
-                    self.comps[name] = item_data.id
-                    data = chunk.data.find("cdta").data
+                    asset = Comp(item_data.id, name, chunk, chunk.data.find("cdta").data)
+                    self.comps[name] = asset
                 elif item_data.type == 7:
                     pin = chunk.find("Pin ").data
                     opti = pin.find("opti")
 
                     if opti.type == "Soli":
-                        type = self.AssetType.Solid
-                        name = name or opti.name
-                        data = opti
+                        asset = SolidAsset(item_data.id, name, chunk, opti)
                     else:
-                        type = self.AssetType.Image
-                        filename = pin.find("Als2").data.find("alas").data["fullpath"]
-                        name = name or os.path.basename(filename)
-                        sspc = pin.find("sspc").data
-                        data = {
-                            "width": sspc.width,
-                            "height": sspc.height,
-                            "filename": filename
-                        }
+                        asset = FileAsset(item_data.id, name, chunk, pin)
 
-                self.assets[item_data.id] = self.ParsedAsset(item_data.id, name, type, chunk, data)
+                self.assets[asset.id] = asset
 
     def import_aep(self, top_level, name):
-        self.items_from_fold(top_level.data.find("Fold"))
-        if not name:
-            id = next(iter(self.comps.values()))
-        else:
-            id = self.comps[name]
+        self.collect_assets(top_level.data.find("Fold"))
 
-        return self.item_chunk_to_animation(self.assets[id].block)
+        if not name:
+            comp = next(iter(self.comps.values()))
+        else:
+            comp = self.comps[name]
+
+        comp.load(self)
+
+        return comp.to_main()
