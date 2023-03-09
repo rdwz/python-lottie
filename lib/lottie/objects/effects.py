@@ -482,3 +482,14 @@ class WavyEffect(Effect):
     ]
     ## %Effect type.
     type = 32
+
+
+#ingroup Lottie
+class TwirlEffect(Effect):
+    _effects = [
+        ("Angle", EffectValueAngle),
+        ("Radius", EffectValueSlider),
+        ("Center", EffectValuePoint),
+    ]
+    ## %Effect type.
+    type = 30

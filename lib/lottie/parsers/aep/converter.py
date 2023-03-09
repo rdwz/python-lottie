@@ -69,7 +69,7 @@ class FileAsset(Asset):
         super().__init__(id, name, chunk)
         self.filename = pin.find("Als2").data.find("alas").data["fullpath"]
         if not self.name:
-            self.name = os.path.basename(filename)
+            self.name = os.path.basename(self.filename)
         sspc = pin.find("sspc").data
         self.width = sspc.width
         self.height = sspc.height
@@ -88,6 +88,7 @@ class SolidAsset(Asset):
     def __init__(self, id, name, chunk, cdta, opti):
         super().__init__(id, name or opti.name, chunk)
         self.color = Color(opti.r, opti.g, opti.b, opti.a)
+
 
 class Comp(Asset):
     def __init__(self, id, name, chunk, cdta):
@@ -266,6 +267,37 @@ class AepConverter:
         "ADBE Text Path Options": ["masked_path", None],
         "ADBE Text More Options": ["more_options", None],
     }
+    effect_value_types = {
+        0: objects.effects.EffectValueLayer,
+        2: objects.effects.EffectValueSlider,
+        3: objects.effects.EffectValueAngle,
+        4: objects.effects.EffectValueCheckbox,
+        5: objects.effects.EffectValueColor,
+        6: objects.effects.EffectValuePoint,
+        7: objects.effects.EffectValueDropDown,
+        9: objects.effects.EffectNoValue,
+        10: objects.effects.EffectValueSlider,
+        13: objects.effects.CustomEffect,
+        15: objects.effects.EffectNoValue,
+        16: objects.effects.EffectValuePoint,
+    }
+    effect_match_names = {
+        "ADBE Tint": objects.effects.TintEffect,
+        "ADBE Fill": objects.effects.FillEffect,
+        "ADBE Stroke": objects.effects.StrokeEffect,
+        "ADBE Tritone": objects.effects.TritoneEffect,
+        "ADBE Pro Levels2": objects.effects.ProLevelsEffect,
+        "ADBE Drop Shadow": objects.effects.DropShadowEffect,
+        "ADBE Radial Wipe": objects.effects.RadialWipeEffect,
+        "ADBE Displacement Map": objects.effects.DisplacementMapEffect,
+        "ADBE Set Matte3": objects.effects.Matte3Effect,
+        "ADBE Gaussian Blur 2": objects.effects.GaussianBlurEffect,
+        "ADBE Twirl": objects.effects.TwirlEffect,
+        "ADBE MESH WARP": objects.effects.MeshWarpEffect,
+        "ADBE Ripple": objects.effects.WavyEffect,
+        "ADBE Spherize": objects.effects.SpherizeEffect,
+        "ADBE FreePin3": objects.effects.PuppetEffect,
+    }
 
     def __init__(self):
         self.time_mult = 1
@@ -273,6 +305,7 @@ class AepConverter:
         self.assets = {}
         self.comps = {}
         self.layers = {}
+        self.effects = {}
 
     def read_properties(self, object, chunk):
         match_name = None
@@ -280,6 +313,11 @@ class AepConverter:
             # Match name
             if item.header == "tdmn":
                 match_name = item.data
+            elif match_name in self.property_groups:
+                prop, funcn = self.property_groups[match_name]
+                subobj = object if prop is None else getattr(object, prop)
+                func = self.read_properties if funcn is None else getattr(self, funcn)
+                func(subobj, item)
             # Name
             elif item.header == "tdsn" and len(item.data.children) > 0:
                 name = item.data.children[0]
@@ -412,6 +450,26 @@ class AepConverter:
             tl[1] * (1-p.y) + br[1] * p.y
         )
 
+    def load_effect_values(self, effect):
+        for index, tdbs in enumerate(chunk.data.find_all("tdbs")):
+            if index == 0:
+                continue
+            policy = PropertyPolicyMultidim()
+            prop = effect.effects[index-1].value
+            self.parse_property_tbds(item, prop, policy)
+
+    def load_effects(self, layer: objects.layers.VisualLayer, chunk):
+        mn = None
+        layer.effects = []
+
+        for item in chunk.data.children:
+            if item.header == "tdmn":
+                match_name = item.data
+            elif item.header == "LIST" and item.data.type == "sspc":
+                effect = self.effects[mn].clone()
+                self.load_effect_values(effect, item.data.find("tdgp"))
+                layer.effects.append(effect)
+
     def create_asset_layer(self, ldta):
         asset = self.assets[ldta.source_id]
         if isinstance(asset, Comp):
@@ -489,13 +547,6 @@ class AepConverter:
 
         return comp
 
-    def item_to_comp(self, chunk, item_data):
-        type = self.AssetType.Comp
-        self.comps[name] = Comp(item_data.id, chunk)
-        data = chunk.data.find("cdta").data
-        name = chunk.data.find("Utf8").data
-        self.assets[item_data.id] = self.ParsedAsset(item_data.id, name, type, chunk, data)
-
     def collect_assets(self, fold):
         for chunk in fold.data.children:
             if chunk.header == "LIST" and chunk.data.type == "Item":
@@ -518,8 +569,42 @@ class AepConverter:
 
                 self.assets[asset.id] = asset
 
+    def collect_effects(self, effects):
+        for definition in effects.data.find_all("EfDf"):
+            match, params = definition.data.find_multiple("tdmn", "sspc")
+            if match in self.effects:
+                continue
+
+            if match in self.effect_match_names:
+                effect = self.effect_match_names()
+                effect.match_name = match
+                self.effects[match] = effect
+                continue
+
+            effect = objects.effects.CustomEffect()
+            effect.match_name = match
+            self.effects[match] = effect
+            index = 0
+            mn = None
+            for chunk in definition.data.children:
+                if chunk.header == "tdmn":
+                    mn = chunk.data
+                elif chunk.header == "LIST" and chunk.data.type == "sspc":
+                    index += 1
+                    if index == 1:
+                        continue
+                    type = chunk.data.find("pard").value
+                    val = self.effect_value_types.get(type, objects.effects.EffectNoValue)()
+                    effect.effects.append(val)
+
+    def process(self, top_level):
+        fold, effects = top_level.data.find("Fold", "EfdG")
+        self.collect_assets(fold)
+        if effects:
+            self.collect_effects(effects)
+
     def import_aep(self, top_level, name):
-        self.collect_assets(top_level.data.find("Fold"))
+        self.process(top_level)
 
         if not name:
             comp = next(iter(self.comps.values()))
