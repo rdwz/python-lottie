@@ -46,16 +46,27 @@ def parse_gradient_xml(gradient, colors_prop):
 
     data = gradient["Gradient Color Data"]
 
-    # TODO handle that weird stop[1] data
-
+    previous = None
+    count = 0
     for stop in data["Color Stops"]["Stops List"].values():
         colors = stop["Stops Color"]
-        flat += [colors[0], colors[2], colors[3], colors[4]]
+        if previous is not None:
+            offset = previous[0] * (1 - previous[1]) + colors[0] * previous[1]
+            count += 1
+            flat += [offset, (previous[2] + colors[2]) / 2, (previous[3] + colors[3]) / 2, (previous[4] + colors[4]) / 2]
 
+        count += 1
+        flat += [colors[0], colors[2], colors[3], colors[4]]
+        previous = colors
+
+    previous = None
     for stop in data["Alpha Stops"]["Stops List"].values():
         alpha = stop["Stops Alpha"]
+        if previous is not None:
+            offset = previous[0] * (1 - previous[1]) + colors[0] * previous[1]
+            flat += [offset, (previous[2] + colors[2])]
         flat += [alpha[0], alpha[2]]
 
-    colors_prop.count = data["Color Stops"]["Stops Size"]
+    colors_prop.count = count
 
     return NVector(*flat)

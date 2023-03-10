@@ -120,11 +120,11 @@ class Comp(Asset):
         anim.width = self.cdta.width
         anim.height = self.cdta.height
         anim.frame_rate = self.cdta.frame_rate
-        anim.in_point = self.cdta.start_time * self.cdta.time_scale
+        anim.in_point = self.cdta.start_time / self.cdta.time_scale
         if self.cdta.end_time == 0xffff:
-            anim.out_point = self.cdta.comp_duration * self.cdta.time_scale
+            anim.out_point = self.cdta.comp_duration / self.cdta.time_scale
         else:
-            anim.out_point = self.cdta.end_time * self.cdta.time_scale
+            anim.out_point = self.cdta.end_time / self.cdta.time_scale
         anim.layers = self.layers
 
         for asset in self.used_assets:
@@ -225,7 +225,6 @@ class AepConverter:
         "ADBE Vector Repeater Copies": ("copies", None),
         "ADBE Vector Repeater Offset": ("offset", None),
         "ADBE Vector Repeater Order": ("composite", objects.shapes.Composite),
-        #"ADBE Vector Repeater Transform": ??
         "ADBE Vector Repeater Anchor Point": ("anchor_point", None),
         "ADBE Vector Repeater Position": ("position", None),
         "ADBE Vector Repeater Rotation": ("rotation", None),
@@ -266,6 +265,7 @@ class AepConverter:
         "ADBE Vector Stroke Dashes": ["dashes", "load_dashes"],
         "ADBE Text Path Options": ["masked_path", None],
         "ADBE Text More Options": ["more_options", None],
+        "ADBE Vector Repeater Transform": ["transform", None],
     }
     effect_value_types = {
         0: objects.effects.EffectValueLayer,
@@ -416,14 +416,15 @@ class AepConverter:
         if not meta:
             return
 
-        prop = object.colors.colors
+        colors = getattr(object, meta[0])
+        prop = colors.colors
 
         policy = PropertyPolicyPrepared([])
         tbds, keys = chunk.data.find_multiple("tdbs", "GCky")
 
         for item in keys.data.children:
             if item.header == "Utf8":
-                policy.values.append(parse_gradient_xml(item.data, object.colors))
+                policy.values.append(parse_gradient_xml(item.data, colors))
 
         self.parse_property_tbds(tbds, prop, policy)
 
@@ -449,6 +450,10 @@ class AepConverter:
             tl[0] * (1-p.x) + br[0] * p.x,
             tl[1] * (1-p.y) + br[1] * p.y
         )
+
+    def load_dashes(self, dashes, chunk):
+        # TODO
+        pass
 
     def load_effect_values(self, effect, chunk):
         for index, tdbs in enumerate(chunk.data.find_all("tdbs")):
@@ -527,7 +532,7 @@ class AepConverter:
                 layer.out_point = self.time(item.data.out_time)
                 layer.threedimensional = item.data.ddd
                 layer.hidden = not item.data.visible
-                layer.index = item.data.id
+                layer.index = item.data.layer_id
 
             elif item.header == "LIST":
                 self.read_properties(layer, item)
@@ -602,7 +607,7 @@ class AepConverter:
             self.effects[match] = effect
 
     def process(self, top_level):
-        fold, effects = top_level.data.find("Fold", "EfdG")
+        fold, effects = top_level.data.find_multiple("Fold", "EfdG")
         self.collect_assets(fold)
         if effects:
             self.collect_effects(effects)
