@@ -482,10 +482,14 @@ class AepParser(RiffParser):
 
     def read_nmhd(self, length):
         reader = StructuredReader(self, length)
-        reader.skip(8)
+        reader.skip(3)
+        reader.read_attribute("attrs", 1, bytes)
+        reader.skip(4)
         reader.read_attribute("duration", 4, int)
         reader.skip(4)
         reader.read_attribute("color", 1, int)
         reader.finalize()
+
+        reader.attr_bit("protected", 0, 1)
         return reader.value
 
