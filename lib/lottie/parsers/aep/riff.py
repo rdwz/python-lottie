@@ -74,13 +74,16 @@ class RiffList:
                 return ch
 
     def find_multiple(self, *headers):
+        headers = list(headers)
         found = [None] * len(headers)
         for ch in self.children:
             for i, header in enumerate(headers):
                 if ch.header == header:
+                    headers[i] = None
                     found[i] = ch
                     break
                 elif ch.header == "LIST" and ch.data.type == header:
+                    headers[i] = None
                     found[i] = ch
                     break
 

@@ -104,6 +104,7 @@ class Comp(Asset):
         self.name = ""
         self.layers = None
         self.used_assets = set()
+        self.markers = []
 
     @property
     def lottie_id(self):
@@ -133,6 +134,7 @@ class Comp(Asset):
         else:
             anim.out_point = self.cdta.end_time / self.cdta.time_scale
         anim.layers = self.layers
+        anim.markers = self.markers
 
         for asset in self.used_assets:
             anim.assets = [a.to_lottie() for a in self.used_assets]
@@ -373,11 +375,11 @@ class AepConverter:
             policy.converter = converter
 
         prop = objects.properties.MultiDimensional()
-        self.parse_property_tbds(chunk, prop, policy)
+        self.parse_property_tdbs(chunk, prop, policy)
 
         setattr(object, prop_name, prop)
 
-    def parse_property_tbds(self, chunk, prop, policy):
+    def parse_property_tdbs(self, chunk, prop, policy):
         static, kf, expr = chunk.data.find_multiple("cdat", "list", "Utf8")
 
         if static:
@@ -416,10 +418,10 @@ class AepConverter:
         prop = objects.properties.ShapeProperty()
 
         policy = PropertyPolicyPrepared([])
-        tbds, omks = chunk.data.find_multiple("tdbs", "omks")
+        tdbs, omks = chunk.data.find_multiple("tdbs", "omks")
 
         self.parse_shape_omks(omks, policy)
-        self.parse_property_tbds(tbds, prop, policy)
+        self.parse_property_tdbs(tdbs, prop, policy)
 
         setattr(object, prop_name, prop)
 
@@ -437,13 +439,13 @@ class AepConverter:
         prop = colors.colors
 
         policy = PropertyPolicyPrepared([])
-        tbds, keys = chunk.data.find_multiple("tdbs", "GCky")
+        tdbs, keys = chunk.data.find_multiple("tdbs", "GCky")
 
         for item in keys.data.children:
             if item.header == "Utf8":
                 policy.values.append(parse_gradient_xml(item.data, colors))
 
-        self.parse_property_tbds(tbds, prop, policy)
+        self.parse_property_tdbs(tdbs, prop, policy)
 
     def parse_shape_shap(self, chunk):
         bez = objects.bezier.Bezier()
@@ -476,7 +478,7 @@ class AepConverter:
                 mn = item.data
             elif item.header == "LIST" and item.data.type == "tdbs":
                 dash = objects.shapes.StrokeDash()
-                self.parse_property_tbds(item, dash.length, PropertyPolicyMultidim())
+                self.parse_property_tdbs(item, dash.length, PropertyPolicyMultidim())
                 dash.match_name = mn
                 name = mn[len("ADBE Vector Stroke "):].replace(" ", "").lower()
                 dash.name = name
@@ -489,7 +491,7 @@ class AepConverter:
                 continue
             policy = PropertyPolicyMultidim()
             prop = effect.effects[index-1].value
-            self.parse_property_tbds(tdbs, prop, policy)
+            self.parse_property_tdbs(tdbs, prop, policy)
 
     def load_effects(self, layer: objects.layers.VisualLayer, chunk):
         mn = None
@@ -567,16 +569,39 @@ class AepConverter:
 
         return layer
 
+    def chunk_to_markerts(self, chunk, comp: Comp):
+        mrst = chunk.data.find("tdgp").data.find("mrst").data
+
+        mrky, tdbs = mrst.find_multiple("mrky", "tdbs")
+
+        markers = []
+
+        for item in mrky.data.children:
+            if item.header == "LIST" and item.data.type == "Nmrd":
+                marker = objects.animation.Marker()
+                nmhd, comment = item.data.find_multiple("NmHd", "Utf8")
+                marker.duration = nmhd.data.duration
+                marker.comment = comment.data
+                markers.append(marker)
+
+        for i, kf in enumerate(tdbs.data.find("list").data.find("ldat").data.keyframes):
+            markers[i].time = self.time(kf.time)
+
+        comp.markers += markers
+
     def load_comp(self, comp: Comp):
         self.anim = comp
         self.time_mult = 1 / comp.time_scale
         self.time_offset = 0
 
         for item in comp.chunk.data.children:
-            if item.header == "LIST" and item.data.type == "Layr":
-                layer = self.chunk_to_layer(item)
-                if layer:
-                    comp.layers.append(layer)
+            if item.header == "LIST":
+                if item.data.type == "Layr":
+                    layer = self.chunk_to_layer(item)
+                    if layer:
+                        comp.layers.append(layer)
+                elif item.data.type == "SecL":
+                    self.chunk_to_markerts(item, comp)
 
         return comp
 

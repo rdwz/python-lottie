@@ -84,6 +84,7 @@ class AepParser(RiffParser):
             "parn": AepParser.read_number,
             "pard": AepParser.read_pard,
             "btdk": AepParser.read_btdk,
+            "NmHd": AepParser.read_nmhd,
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
@@ -225,7 +226,9 @@ class AepParser(RiffParser):
         # 40
         reader.read_attribute("source_id", 4, int)
         # 44
-        reader.skip(20)
+        reader.skip(17)
+        reader.read_attribute("color", 1, int)
+        reader.skip(2)
         # 64
         reader.read_attribute_string0("name", 32)
         # 96
@@ -476,3 +479,13 @@ class AepParser(RiffParser):
     def read_btdk(self, length):
         parser = CosParser(self.file, length)
         return parser.parse()
+
+    def read_nmhd(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(8)
+        reader.read_attribute("duration", 4, int)
+        reader.skip(4)
+        reader.read_attribute("color", 1, int)
+        reader.finalize()
+        return reader.value
+
