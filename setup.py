@@ -44,6 +44,7 @@ extras_require = {
     "emoji": ["grapheme"],
     "GUI": ["QScintilla"],
     "AnimatedSVG": ["glaxnimate"],
+    "AEP": ["pillow", "esprima", "escodegen"],
 }
 extras_require["all"] = list(reduce(lambda a, b: a | b, map(set, extras_require.values())))
 

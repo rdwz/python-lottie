@@ -21,3 +21,7 @@ QScintilla
 # Testing
 coverage
 flake8
+
+# AEP
+esprima
+escodegen

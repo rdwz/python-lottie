@@ -146,6 +146,12 @@ class Comp(Asset):
             converter.load_comp(self)
 
 
+class ExpressionMode(enum.Enum):
+    Ignore = enum.auto()
+    AsIs = enum.auto()
+    Bodymovin = enum.auto()
+
+
 class AepConverter:
     placeholder = "-_0_/-"
     shapes = {
@@ -262,7 +268,7 @@ class AepConverter:
         "ADBE Effect Parade": ["effects", "load_effects"],
         "ADBE Transform Group": ["transform", None],
         "ADBE Vector Transform Group": ["transform", None],
-        "ADBE Vector Stroke Dashes": ["dashes", "load_dashes"],
+        "ADBE Vector Stroke Dashes": ["", "load_dashes"],
         "ADBE Text Path Options": ["masked_path", None],
         "ADBE Text More Options": ["more_options", None],
         "ADBE Vector Repeater Transform": ["transform", None],
@@ -306,6 +312,7 @@ class AepConverter:
         self.comps = {}
         self.layers = {}
         self.effects = {}
+        self.expression_mode = ExpressionMode.Bodymovin
 
     def read_properties(self, object, chunk):
         match_name = None
@@ -315,7 +322,7 @@ class AepConverter:
                 match_name = item.data
             elif match_name in self.property_groups:
                 prop, funcn = self.property_groups[match_name]
-                subobj = object if prop is None else getattr(object, prop)
+                subobj = object if not prop else getattr(object, prop)
                 func = self.read_properties if funcn is None else getattr(self, funcn)
                 func(subobj, item)
             # Name
@@ -374,7 +381,11 @@ class AepConverter:
 
         if expr:
             # TODO should convert expressions the same way that bodymovin does
-            prop.expression = expr.data
+            if self.expression_mode == ExpressionMode.AsIs:
+                prop.expression = expr.data
+            elif self.expression_mode == ExpressionMode.AsIs:
+                from .expression import process
+                prop.expression = process(prop.expression)
 
     def time(self, value):
         return (value + self.time_offset) * self.time_mult
@@ -451,9 +462,20 @@ class AepConverter:
             tl[1] * (1-p.y) + br[1] * p.y
         )
 
-    def load_dashes(self, dashes, chunk):
-        # TODO
-        pass
+    def load_dashes(self, stroke, chunk):
+        stroke.dashes = []
+        mn = None
+        for item in chunk.data.children:
+            if item.header == "tdmn":
+                mn = item.data
+            elif item.header == "LIST" and item.data.type == "tdbs":
+                dash = objects.shapes.StrokeDash()
+                self.parse_property_tbds(item, dash.length, PropertyPolicyMultidim())
+                dash.match_name = mn
+                name = mn[len("ADBE Vector Stroke "):].replace(" ", "").lower()
+                dash.name = name
+                dash.type = objects.shapes.StrokeDashType(name[0])
+                stroke.dashes.append(dash)
 
     def load_effect_values(self, effect, chunk):
         for index, tdbs in enumerate(chunk.data.find_all("tdbs")):
