@@ -6,6 +6,13 @@ from ...nvector import NVector
 from ...utils.color import Color
 from .gradient_xml import parse_gradient_xml
 
+try:
+    from .expressions import process_expression
+    can_convert_expressions = True
+except ImportError:
+    can_convert_expressions = False
+    pass
+
 
 def convert_value_color(arr):
     return Color(arr[1] / 255, arr[2] / 255, arr[3] / 255, arr[0] / 255)
@@ -305,14 +312,14 @@ class AepConverter:
         "ADBE FreePin3": objects.effects.PuppetEffect,
     }
 
-    def __init__(self):
+    def __init__(self, expression_mode=ExpressionMode.Ignore):
         self.time_mult = 1
         self.time_offset = 0
         self.assets = {}
         self.comps = {}
         self.layers = {}
         self.effects = {}
-        self.expression_mode = ExpressionMode.Bodymovin
+        self.expression_mode = expression_mode
 
     def read_properties(self, object, chunk):
         match_name = None
@@ -383,9 +390,8 @@ class AepConverter:
             # TODO should convert expressions the same way that bodymovin does
             if self.expression_mode == ExpressionMode.AsIs:
                 prop.expression = expr.data
-            elif self.expression_mode == ExpressionMode.AsIs:
-                from .expression import process
-                prop.expression = process(prop.expression)
+            elif self.expression_mode == ExpressionMode.Bodymovin:
+                prop.expression = process_expression(expr.data)
 
     def time(self, value):
         return (value + self.time_offset) * self.time_mult

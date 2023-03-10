@@ -117,9 +117,9 @@ class Converter:
             if n.type == "Identifier":
                 names.append(n.name)
             elif n.type == "AssignmentPattern":
-                self.gather_params([node.left], names)
+                self.gather_params([n.left], names)
             elif n.type == "RestElement":
-                self.gather_params([node.argument], names)
+                self.gather_params([n.argument], names)
 
     def on_node_enter(self, node):
         if node.type == "VariableDeclarator":
@@ -168,7 +168,7 @@ class Converter:
         return node
 
 
-def process(string):
+def process_expression(string):
     """!
     @brief converts expressions the same was as the bodymovin plugin
     """
