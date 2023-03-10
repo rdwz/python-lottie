@@ -13,11 +13,9 @@ opts = [
 ]
 
 if can_convert_expressions:
-    opts.append(
-        ExtraOption("expressions"),
-        help="Export expressions",
-        action="store_true"
-    )
+    opts.append(ExtraOption(
+        "expressions", help="Export expressions", action="store_true", default=False
+    ))
 
 
 def convert(rifx, comp, expressions):
@@ -29,7 +27,7 @@ def convert(rifx, comp, expressions):
 def import_aep(file, comp=None, expressions=False):
     if isinstance(file, str):
         with open(file, "rb") as fileobj:
-            return import_aep(fileobj, comp)
+            return import_aep(fileobj, comp, expressions)
 
     parser = AepParser(file)
     return convert(parser.parse(), comp, expressions)
