@@ -1,5 +1,6 @@
 import math
 from .base import LottieObject, LottieProp, PseudoList, PseudoBool
+from ..nvector import NVector
 
 
 ## @ingroup Lottie
@@ -72,12 +73,16 @@ class EaseOut:
         )
 
 
-class Jump:
+class Hold:
     """!
     Jumps to the end value at the end of the keyframe
     """
     def __call__(self, keyframe):
         keyframe.jump = True
+
+
+# Backwards compatibility
+Jump = Hold
 
 
 class Sigmoid:
@@ -112,3 +117,22 @@ class Split:
         t = keyframe.out_value
         self.in_ease(keyframe)
         keyframe.out_value = t
+
+
+class Bezier:
+    """!
+    Custom easing
+    """
+    def __init__(self, out_point, in_point):
+        self.in_point = in_point
+        self.out_point = out_point
+
+    def __call__(self, keyframe):
+        keyframe.out_value = KeyframeBezierHandle(
+            self.out_point.x,
+            self.out_point.y
+        )
+        keyframe.in_value = KeyframeBezierHandle(
+            self.in_point.x,
+            self.in_point.y
+        )

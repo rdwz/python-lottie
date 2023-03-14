@@ -161,7 +161,7 @@ class Keyframe(LottieObject):
         return KeyframeBezier.from_keyframe(self).y_at_x(ratio)
 
     def __str__(self):
-        return "%s %s" % (self.time, self.start)
+        return "%s %s" % (self.time, self.value)
 
 
 ## @ingroup Lottie
@@ -180,14 +180,14 @@ class OffsetKeyframe(Keyframe):
     @endparblock
     """
     _props = [
-        LottieProp("start", "s", NVector, False),
+        LottieProp("value", "s", NVector, False),
         LottieProp("end", "e", NVector, False),
     ]
 
-    def __init__(self, time=0, start=None, end=None, easing_function=None, in_tan=None, out_tan=None):
+    def __init__(self, time=0, value=None, end=None, easing_function=None, in_tan=None, out_tan=None):
         Keyframe.__init__(self, time, easing_function)
         ## Start value of keyframe segment.
-        self.start = start
+        self.value = value
         ## End value of keyframe segment.
         self.end = end
         ## In Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
@@ -195,32 +195,41 @@ class OffsetKeyframe(Keyframe):
         ## Out Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
         self.out_tan = out_tan
 
-    def interpolated_value(self, ratio, next_start=None):
-        end = next_start if self.end is None else self.end
+    @property
+    def start(self):
+        return self.value
+
+    @start.setter
+    def start(self, v):
+        self.value = v
+        return v
+
+    def interpolated_value(self, ratio, next_value=None):
+        end = next_value if self.end is None else self.end
         if end is None:
-            return self.start
+            return self.value
         if not self.in_value or not self.out_value:
-            return self.start
+            return self.value
         if ratio == 1:
             return end
         if ratio == 0:
-            return self.start
+            return self.value
         if self.in_tan and self.out_tan:
             bezier = Bezier()
-            bezier.add_point(self.start, NVector(0, 0), self.out_tan)
+            bezier.add_point(self.value, NVector(0, 0), self.out_tan)
             bezier.add_point(end, self.in_tan, NVector(0, 0))
             return bezier.point_at(ratio)
 
         lerpv = self.lerp_factor(ratio)
-        return self.start.lerp(end, lerpv)
+        return self.value.lerp(end, lerpv)
 
-    def interpolated_tangent_angle(self, ratio, next_start=None):
-        end = next_start if self.end is None else self.end
+    def interpolated_tangent_angle(self, ratio, next_value=None):
+        end = next_value if self.end is None else self.end
         if end is None or not self.in_tan or not self.out_tan:
             return 0
 
         bezier = Bezier()
-        bezier.add_point(self.start, NVector(0, 0), self.out_tan)
+        bezier.add_point(self.value, NVector(0, 0), self.out_tan)
         bezier.add_point(end, self.in_tan, NVector(0, 0))
         return bezier.tangent_angle_at(ratio)
 
@@ -229,7 +238,7 @@ class OffsetKeyframe(Keyframe):
             type(self).__module__,
             type(self).__name__,
             self.time,
-            self.start,
+            self.value,
             (" -> %s" % self.end) if self.end is not None else ""
         )
 
@@ -257,7 +266,7 @@ class AnimatableMixin:
         self.animated = False
         self.keyframes = None
 
-    def add_keyframe(self, time, value, interp=easing.Linear(), *args, **kwargs):
+    def add_keyframe(self, time, value, interp=easing.Linear(), *args, end=False, **kwargs):
         """!
         @param time     The time this keyframe appears in
         @param value    The value the property should have at @p time
@@ -272,20 +281,22 @@ class AnimatableMixin:
             self.animated = True
         else:
             if self.keyframes[-1].time == time:
-                if value != self.keyframes[-1].start:
-                    self.keyframes[-1].start = value
+                if value != self.keyframes[-1].value:
+                    self.keyframes[-1].value = value
                 return
-            else:
+            elif end:
                 self.keyframes[-1].end = value.clone()
 
-        self.keyframes.append(self.keyframe_type(
+        kf = self.keyframe_type(
             time,
             value,
             None,
             interp,
             *args,
             **kwargs
-        ))
+        )
+        self.keyframes.append(kf)
+        return kf
 
     def get_value(self, time=0):
         """!
@@ -300,12 +311,12 @@ class AnimatableMixin:
         return self._get_value_helper(time)[0]
 
     def _get_value_helper(self, time):
-        val = self.keyframes[0].start
+        val = self.keyframes[0].value
         for i in range(len(self.keyframes)):
             k = self.keyframes[i]
             if time - k.time <= 0:
-                if k.start is not None:
-                    val = k.start
+                if k.value is not None:
+                    val = k.value
 
                 kp = self.keyframes[i-1] if i > 0 else None
                 if kp:
@@ -333,7 +344,7 @@ class AnimatableMixin:
 
     def __repr__(self):
         if self.keyframes and len(self.keyframes) > 1:
-            val = "%s -> %s" % (self.keyframes[0].start, self.keyframes[-2].end)
+            val = "%s -> %s" % (self.keyframes[0].value, self.keyframes[-2].end)
         else:
             val = self.value
         return "<%s.%s %s>" % (type(self).__module__, type(self).__name__, val)
@@ -359,11 +370,11 @@ class AnimatableMixin:
             if new_kframes and new_kframes[-1].time == keyframe.time:
                 continue
             kfcopy = keyframe.clone()
-            kfcopy.start = conversion(*(i.get_value(keyframe.time) for i in items))
+            kfcopy.value = conversion(*(i.get_value(keyframe.time) for i in items))
             new_kframes.append(kfcopy)
 
         for i in range(0, len(new_kframes) - 1):
-            new_kframes[i].end = new_kframes[i+1].start
+            new_kframes[i].end = new_kframes[i+1].value
 
         return new_kframes
 
@@ -374,38 +385,38 @@ class AnimatableMixin:
             obj.animated = prop_animated(lottiedict)
         return obj
 
-    def average(self, start, end, value_map=lambda v: v):
+    def average(self, value, end, value_map=lambda v: v):
         if not self.animated or len(self.keyframes) == 0:
             return value_map(self.value)
         elif len(self.keyframes) == 1:
-            return value_map(self.keyframes[0].start)
+            return value_map(self.keyframes[0].value)
 
         total_weight = 0
-        value = value_map(self.keyframes[0].start) * 0
+        value = value_map(self.keyframes[0].value) * 0
         kf_index = 0
 
-        if self.keyframes[0].time > start:
-            weight = self.keyframes[0].time - start
-            value += value_map(self.keyframes[0].start) * weight
+        if self.keyframes[0].time > value:
+            weight = self.keyframes[0].time - value
+            value += value_map(self.keyframes[0].value) * weight
             total_weight += weight
-        elif self.keyframes[0].time < start:
+        elif self.keyframes[0].time < value:
             avg = (self.keyframes[1].time + self.keyframes[0].time) / 2
             kf_index = 1
             if self.keyframes[0].hold:
-                weight = self.keyframes[1].time - start
-                value += value_map(self.keyframes[0].start) * weight
+                weight = self.keyframes[1].time - value
+                value += value_map(self.keyframes[0].value) * weight
                 total_weight += weight
-            elif start < avg:
-                weight = avg - start
-                value += value_map(self.keyframes[0].start) * weight
+            elif value < avg:
+                weight = avg - value
+                value += value_map(self.keyframes[0].value) * weight
                 total_weight += weight
 
                 half = (self.keyframes[1].time - self.keyframes[0].time) / 2
-                value += value_map(self.keyframes[1].start) * half
+                value += value_map(self.keyframes[1].value) * half
                 total_weight += half
             else:
-                weight = self.keyframes[1].time - start
-                value += value_map(self.keyframes[1].start) * weight
+                weight = self.keyframes[1].time - value
+                value += value_map(self.keyframes[1].value) * weight
                 total_weight += weight
 
         for i in range(kf_index, len(self.keyframes) - 1):
@@ -417,35 +428,35 @@ class AnimatableMixin:
             delta = kfn.time - kf.time
             total_weight += delta
             if kf.hold:
-                value += value_map(kf.start) * delta
+                value += value_map(kf.value) * delta
             else:
-                value += value_map(kf.start) * (delta / 2)
-                value += value_map(kfn.start) * (delta / 2)
+                value += value_map(kf.value) * (delta / 2)
+                value += value_map(kfn.value) * (delta / 2)
         else:
             kf = self.keyframes[-1]
             kfn = self.keyframes[-1]
 
         if kfn.time < end:
             weight = end - kfn.time
-            value += value_map(kfn.start) * weight
+            value += value_map(kfn.value) * weight
             total_weight += weight
         elif kf.hold:
             weight = end - kf.time
-            value += value_map(kf.start) * weight
+            value += value_map(kf.value) * weight
             total_weight += weight
         elif kfn.time > end:
             avg = (kf.time + kfn.time) / 2
             if end < avg:
                 weight = end - kf.time
-                value += value_map(kf.start) * weight
+                value += value_map(kf.value) * weight
                 total_weight += weight
             else:
                 half = (kfn.time - kf.time) / 2
-                value += value_map(kf.start) * half
+                value += value_map(kf.value) * half
                 total_weight += half
 
                 weight = end - avg
-                value += value_map(kfn.start) * weight
+                value += value_map(kfn.value) * weight
                 total_weight += weight
 
         if total_weight == 0:
@@ -493,7 +504,7 @@ class MultiDimensional(AnimatableMixin, LottieObject):
             return kp.interpolated_tangent_angle(t, end)
 
         if self.keyframes[0].time >= time:
-            end = self.keyframes[0].end if self.keyframes[0].end is not None else self.keyframes[1].start
+            end = self.keyframes[0].end if self.keyframes[0].end is not None else self.keyframes[1].value
             return self.keyframes[0].interpolated_tangent_angle(0, end)
 
         return 0
@@ -614,7 +625,7 @@ class GradientColors(LottieObject):
         if self.colors.animated and keyframe is not None:
             if keyframe > 1:
                 self.colors.keyframes[keyframe-1].end = flat
-            self.colors.keyframes[keyframe].start = flat
+            self.colors.keyframes[keyframe].value = flat
         else:
             self.colors.clear_animation(flat)
         self.count = len(stops)
@@ -662,14 +673,14 @@ class GradientColors(LottieObject):
         if self.colors.animated:
             if keyframe is None:
                 for kf in self.colors.keyframes:
-                    if kf.start:
-                        self._add_to_flattened(offset, color, kf.start.components)
+                    if kf.value:
+                        self._add_to_flattened(offset, color, kf.value.components)
                     if kf.end:
                         self._add_to_flattened(offset, color, kf.end.components)
             else:
                 if keyframe > 1:
                     self._add_to_flattened(offset, color, self.colors.keyframes[keyframe-1].end.components)
-                self._add_to_flattened(offset, color, self.colors.keyframes[keyframe].start.components)
+                self._add_to_flattened(offset, color, self.colors.keyframes[keyframe].value.components)
         else:
             self._add_to_flattened(offset, color, self.colors.value.components)
         self.count += 1
@@ -684,7 +695,7 @@ class GradientColors(LottieObject):
 
     def get_stops(self, keyframe=0):
         if keyframe is not None:
-            colors = self.colors.keyframes[keyframe].start
+            colors = self.colors.keyframes[keyframe].value
         else:
             colors = self.colors.value
         return self._stops_from_flat(colors)
@@ -737,35 +748,44 @@ class ShapePropKeyframe(Keyframe):
     Keyframe holding Bezier objects
     """
     _props = [
-        LottieProp("start", "s", Bezier, PseudoList),
+        LottieProp("value", "s", Bezier, PseudoList),
         LottieProp("end", "e", Bezier, PseudoList),
     ]
 
-    def __init__(self, time=0, start=None, end=None, easing_function=None):
+    def __init__(self, time=0, value=None, end=None, easing_function=None):
         Keyframe.__init__(self, time, easing_function)
         ## Start value of keyframe segment.
-        self.start = start
+        self.value = value
         ## End value of keyframe segment.
         self.end = end
 
-    def interpolated_value(self, ratio, next_start=None):
-        end = next_start if self.end is None else self.end
+    @property
+    def start(self):
+        return self.value
+
+    @start.setter
+    def start(self, v):
+        self.value = v
+        return v
+
+    def interpolated_value(self, ratio, next_value=None):
+        end = next_value if self.end is None else self.end
         if end is None:
-            return self.start
+            return self.value
         if not self.in_value or not self.out_value:
-            return self.start
+            return self.value
         if ratio == 1:
             return end
-        if ratio == 0 or len(self.start.vertices) != len(end.vertices):
-            return self.start
+        if ratio == 0 or len(self.value.vertices) != len(end.vertices):
+            return self.value
 
         lerpv = self.lerp_factor(ratio)
         bez = Bezier()
-        bez.closed = self.start.closed
-        for i in range(len(self.start.vertices)):
-            bez.vertices.append(self.start.vertices[i].lerp(end.vertices[i], lerpv))
-            bez.in_tangents.append(self.start.in_tangents[i].lerp(end.in_tangents[i], lerpv))
-            bez.out_tangents.append(self.start.out_tangents[i].lerp(end.out_tangents[i], lerpv))
+        bez.closed = self.value.closed
+        for i in range(len(self.value.vertices)):
+            bez.vertices.append(self.value.vertices[i].lerp(end.vertices[i], lerpv))
+            bez.in_tangents.append(self.value.in_tangents[i].lerp(end.in_tangents[i], lerpv))
+            bez.out_tangents.append(self.value.out_tangents[i].lerp(end.out_tangents[i], lerpv))
         return bez
 
 
