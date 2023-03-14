@@ -297,9 +297,21 @@ class AepParser(RiffParser):
 
     def read_ldat_keyframe_common(self, length):
         reader = StructuredReader(self, length)
-        reader.read_attribute("attrs", 1, bytes)
+        reader.skip(1)
         reader.read_attribute("time", 2, int)
-        reader.skip(5)
+        reader.skip(2)
+        reader.read_attribute("attrs", 1, bytes)
+        reader.read_attribute("color", 1, int)
+        reader.read_attribute("attrs2", 1, bytes)
+
+        reader.attr_bit("linear", 0, 0)
+        reader.attr_bit("ease", 0, 1)
+        reader.attr_bit("hold", 0, 2)
+
+        reader.attr_bit("continuous_bezier", 0, 3, "attrs2")
+        reader.attr_bit("auto_bezier", 0, 4, "attrs2")
+        reader.attr_bit("roving", 0, 5, "attrs2")
+
         return reader
 
     def read_ldat_keyframe_position(self, length):
@@ -492,4 +504,3 @@ class AepParser(RiffParser):
 
         reader.attr_bit("protected", 0, 1)
         return reader.value
-
