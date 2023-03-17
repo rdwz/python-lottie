@@ -184,16 +184,12 @@ class OffsetKeyframe(Keyframe):
         LottieProp("end", "e", NVector, False),
     ]
 
-    def __init__(self, time=0, value=None, end=None, easing_function=None, in_tan=None, out_tan=None):
+    def __init__(self, time=0, value=None, easing_function=None, end=None):
         Keyframe.__init__(self, time, easing_function)
         ## Start value of keyframe segment.
         self.value = value
         ## End value of keyframe segment.
         self.end = end
-        ## In Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
-        self.in_tan = in_tan
-        ## Out Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
-        self.out_tan = out_tan
 
     @property
     def start(self):
@@ -520,6 +516,13 @@ class PositionKeyframe(OffsetKeyframe):
         LottieProp("out_tan", "to", NVector, False),
     ]
 
+    def __init__(self, time=0, value=None, easing_function=None, in_tan=None, out_tan=None, end=None):
+        super().__init__(self, time, value, easing_function, end)
+        ## In Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
+        self.in_tan = in_tan
+        ## Out Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
+        self.out_tan = out_tan
+
 
 class PositionValue(MultiDimensional):
     keyframe_type = PositionKeyframe
@@ -752,7 +755,7 @@ class ShapePropKeyframe(Keyframe):
         LottieProp("end", "e", Bezier, PseudoList),
     ]
 
-    def __init__(self, time=0, value=None, end=None, easing_function=None):
+    def __init__(self, time=0, value=None, easing_function=None, end=None):
         Keyframe.__init__(self, time, easing_function)
         ## Start value of keyframe segment.
         self.value = value

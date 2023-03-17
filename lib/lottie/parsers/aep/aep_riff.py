@@ -149,7 +149,7 @@ class AepParser(RiffParser):
         reader.attr_bit("position", 1, 3)
         reader.attr_bit("static", 1, 0)
 
-        reader.attr_bit("special", 1, 0, "type")
+        reader.attr_bit("no_value", 1, 0, "type")
         reader.attr_bit("color", 3, 0, "type")
         data = reader.value
 
@@ -158,7 +158,7 @@ class AepParser(RiffParser):
             self.keyframe_type = KeyframeType.Position
         elif data.color:
             self.keyframe_type = KeyframeType.Color
-        elif data.special:
+        elif data.no_value:
             self.keyframe_type = KeyframeType.NoValue
         else:
             self.keyframe_type = KeyframeType.MultiDimensional

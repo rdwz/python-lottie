@@ -380,16 +380,15 @@ class AepConverter:
         setattr(object, prop_name, prop)
 
     def parse_property_tdbs(self, chunk, prop, policy):
-        static, kf, expr = chunk.data.find_multiple("cdat", "list", "Utf8")
+        tdb4, static, kf, expr = chunk.data.find_multiple("tdb4", "cdat", "list", "Utf8")
 
         if static:
             prop.value = policy.static(static)
 
         if kf:
-            self.set_property_keyframes(prop, policy, kf)
+            self.set_property_keyframes(prop, policy, kf, tdb4)
 
         if expr:
-            # TODO should convert expressions the same way that bodymovin does
             if self.expression_mode == ExpressionMode.AsIs:
                 prop.expression = expr.data
             elif self.expression_mode == ExpressionMode.Bodymovin:
@@ -398,15 +397,107 @@ class AepConverter:
     def time(self, value):
         return (value + self.time_offset) * self.time_mult
 
-    def set_property_keyframes(self, prop, policy, chunk):
+    def set_property_keyframes(self, prop, policy, chunk, tdb4):
         ldat = chunk.data.find("ldat")
         if ldat and hasattr(ldat.data, "keyframes"):
-            for index, keyframe in enumerate(ldat.data.keyframes):
-                if keyframe.attrs == b'\0':
-                    prop.add_keyframe(self.time(keyframe.time), policy.keyframe(keyframe, index))
+            if len(ldat.data.keyframes) == 0:
+                return
+
+            for index, aep_kf in enumerate(ldat.data.keyframes):
+                time = self.time(aep_kf.time)
+
+                kf = prop.add_keyframe(
+                    time,
+                    policy.keyframe(aep_kf, index)
+                )
+
+                if tdb4.position:
+                    kf.out_tan  = NVector(*aep_kf.pos_tan_out)
+                    kf.in_tan = NVector(*aep_kf.pos_tan_in)
+
+                if aep_kf.hold:
+                    kf.hold = True
+                elif not aep_kf.ease:
+                    objects.easing.Linear()(kf)
+                else:
+                    self.keyframe_ease(policy, aep_kf, kf, ldat.data.keyframes, index, tdb4)
 
         if len(prop.keyframes) == 1:
             prop.clear_animation(prop.keyframes[0].start)
+
+    def keyframe_ease(self, policy, aep_kf, kf, keyframes, index, tdb4):
+        next_i = (index + 1) % len(keyframes)
+        next_aep_kf = keyframes[next_i]
+        next_value = policy.keyframe(next_aep_kf, next_i)
+
+        next_time = self.time(next_aep_kf.time)
+        duration = next_time - kf.time
+        if duration == 0:
+            return objects.easing.Linear()
+
+        in_infl = next_aep_kf.in_influence
+        in_speed = next_aep_kf.in_speed
+        out_infl = aep_kf.out_influence
+        out_speed = aep_kf.out_speed
+
+        if tdb4.position or tdb4.no_value:
+            if isinstance(in_infl, list):
+                in_infl = in_infl[0]
+                in_speed = in_speed[0]
+                out_infl = out_infl[0]
+                out_speed = out_speed[0]
+
+            if tdb4.no_value:
+                curve_length = 1
+            else:
+                curve_length = objects.bezier.CubicBezierSegment(
+                    kf.value, kf.out_tan, kf.in_tan, next_value
+                )
+            average_speed = curve_length / duration
+            if curve_length == 0:
+                out_bez = out_infl / 100
+                in_bez = in_infl / 100
+            else:
+                out_bez = min(curve_length / (out_speed * duration), out_infl / 100)
+                in_bez = min(curve_length / (in_speed * duration), in_infl / 100)
+
+            kf.in_value.x = 1 - in_bez
+            kf.out_value.x = out_bez
+
+            # TODO fuzzy compare?
+            if average_speed == 0:
+                kf.in_value.y = kf.in_value.x
+                kf.out_value.y = kf.out_value.x
+            else:
+                kf.in_value.y = 1 - in_speed / average_speed * in_bez
+                kf.out_value.y = kf.out_value.x / average_speed * out_bez
+
+        else:
+            in_x = []
+            out_x = []
+            in_y = []
+            out_y = []
+
+            for i in range(tdb4.components):
+                in_x.append(1 - in_infl[k] / 100)
+                out_x.append(out_infl[k] / 100)
+
+                y_normal = next_value[i] - kf.value[i]
+                if tdb4.color:
+                    y_normal *= 255
+
+                if abs(y_normal)< 0.0000001:
+                    y_normal = 1;
+
+                out_bez_y = out_speed[i] * out_infl[i] / 100
+                in_bez_y = in_speed[i] * in_infl[i] / 100
+                out_y.append(out_bez_y * duration / y_normal)
+                in_y.append(1 - in_bez_y * duration / y_normal)
+
+            kf.in_value.x = in_x
+            kf.in_value.y = in_y
+            kf.in_value.x = out_x
+            kf.out_value.y = out_y
 
     def parse_property_shape(self, object, match_name, chunk):
         meta = self.properties.get(match_name)

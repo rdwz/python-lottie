@@ -487,3 +487,67 @@ class Bezier(LottieObject):
         if self.closed:
             length += (last-self.vertices[0]).length
         return length
+
+
+class CubicBezierSegment:
+    def __init__(self, p0: NVector, p1: NVector, p2: NVector, p3: NVector):
+        self.a, self.b, self.c, self.d = self.coefficients(p0, p1, p2, p3)
+        self.points = (p0, p1, p2, p3)
+
+    @staticmethod
+    def coeff3(p0: NVector, p1: NVector, p2: NVector, p3: NVector) -> NVector:
+        """!
+        Coefficient of the cubic term
+        """
+        return p0 - p1 * 3 + p2 * 3 - p3
+
+    @staticmethod
+    def coeff2(p0: NVector, p1: NVector, p2: NVector, p3: NVector) -> NVector:
+        """!
+        Coefficient of the quadratic term
+        """
+        return -p0 * 3 + p1 * 6 - p2 * 3
+
+    @staticmethod
+    def coeff1(p0: NVector, p1: NVector, p2: NVector, p3: NVector) -> NVector:
+        """!
+        Coefficient of the linear term
+        """
+        return p0 * 3 - p1 * 3
+
+    @staticmethod
+    def coeff0(p0: NVector, p1: NVector, p2: NVector, p3: NVector) -> NVector:
+        """!
+        Coefficient of the constant term
+        """
+        return p0
+
+    @staticmethod
+    def coefficients(p0: NVector, p1: NVector, p2: NVector, p3: NVector):
+        """!
+        Returns a tuble (a, b, c, d) such that
+
+        `a t**3 + b t**2 + c t + d = 0`
+        """
+        return (
+            CubicBezierSegment.coeff3(p0, p1, p2, p3),
+            CubicBezierSegment.coeff2(p0, p1, p2, p3),
+            CubicBezierSegment.coeff1(p0, p1, p2, p3),
+            CubicBezierSegment.coeff0(p0, p1, p2, p3),
+        )
+
+    def solve(self, t: float) -> NVector:
+        return ((self.a * t + self.b ) * t +  self.c ) * t + self. d
+
+    def length(self, steps: int = 20) -> float:
+        lenght = 0
+
+        p = self.points[0];
+        for i in range(1, steps+1):
+            t = i / steps
+            q = self.solve(t)
+            l = (p - q).length
+            length = l
+            p = q
+
+        return length
