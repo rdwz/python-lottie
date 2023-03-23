@@ -232,15 +232,20 @@ class AepParser(RiffParser):
         # 64
         reader.read_attribute_string0("name", 32)
         # 96
-        reader.skip(35)
+        reader.skip(11)
+        reader.read_attribute("matte_mode", 1, int)
+        reader.skip(23)
         # 131
         reader.read_attribute("type", 1, int)
         # 132
         reader.read_attribute("parent_id", 4, int)
+        reader.skip(24)
+        reader.read_attribute("track_matte_id", 4, int)
 
         reader.finalize()
 
         reader.attr_bit("bicubic", 0, 6)
+        reader.attr_bit("guide", 0, 1)
 
         reader.attr_bit("auto_orient", 1, 0)
         reader.attr_bit("adjustment", 1, 1)
@@ -317,7 +322,11 @@ class AepParser(RiffParser):
     def read_ldat_keyframe_position(self, length):
         reader = self.read_ldat_keyframe_common(length)
         reader.skip(8)
-        reader.read_attribute_array("", 5, 8, float)
+        reader.read_attribute("", 8, float)
+        reader.read_attribute("in_speed", 8, float)
+        reader.read_attribute("in_influence", 8, float)
+        reader.read_attribute("out_speed", 8, float)
+        reader.read_attribute("out_influence", 8, float)
         reader.read_attribute_array("value", self.prop_dimension, 8, float)
         reader.read_attribute_array("pos_tan_in", self.prop_dimension, 8, float)
         reader.read_attribute_array("pos_tan_out", self.prop_dimension, 8, float)

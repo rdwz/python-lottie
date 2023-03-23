@@ -27,6 +27,7 @@ class Layer(VisualObject):
     _props = [
         LottieProp("threedimensional", "ddd", PseudoBool, False),
         LottieProp("hidden", "hd", bool, False),
+        LottieProp("is_guide", "guide", bool, False),
         LottieProp("type", "ty", int, False),
         LottieProp("index", "ind", int, False),
         LottieProp("parent_index", "parent", int, False),
@@ -58,6 +59,8 @@ class Layer(VisualObject):
         self.out_point = None
         ## Start Time of layer. Sets the start time of the layer.
         self.start_time = 0
+        ## When true, the layer should not be rendered
+        self.is_guide = None
 
     @classmethod
     def _load_get_class(cls, lottiedict):

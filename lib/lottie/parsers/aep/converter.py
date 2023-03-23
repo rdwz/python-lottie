@@ -654,6 +654,8 @@ class AepConverter:
                 layer.threedimensional = item.data.ddd
                 layer.hidden = not item.data.visible
                 layer.index = item.data.layer_id
+                layer.is_guide = item.data.guide
+                layer.matte_mode = objects.layers.MatteMode(item.data.matte_mode)
 
             elif item.header == "LIST":
                 self.read_properties(layer, item)

@@ -72,7 +72,6 @@ class CosParser:
         self.file = file
         self.max_pos = max_pos
         self.lookahead = None
-        self.next_char = None
 
     def parse(self):
         self.lex()
@@ -226,6 +225,7 @@ class CosParser:
         if char == b"/":
             return self.lex_identifier()
 
+        # (foo)
         if char == b"(":
             return self.lex_string()
 
@@ -437,7 +437,7 @@ class CosParser:
                 octal = octal*8 + char - b'0'[0]
             return octal.to_bytes(1, "big")
 
-        raise SyntaxError("Invalid Escape sequence")
+        raise SyntaxError("Invalid escape sequence")
 
     def is_octal(self, char):
         return b'0' <= char <= b'8'
@@ -455,7 +455,7 @@ class CosParser:
             elif char == b'>':
                 break
             elif not char.isspace():
-                raise SyntaxError("Invalid character in hex string %s" % char)
+                raise SyntaxError("Invalid character in hex string: %s" % char)
 
         if len(hstr) % 2:
             hstr += b'0'
