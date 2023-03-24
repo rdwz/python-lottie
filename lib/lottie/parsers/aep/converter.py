@@ -184,8 +184,15 @@ class AepConverter:
             color=Color(1, 0, 0),
             fill_rule=objects.shapes.FillRule.NonZero,
         ),
-        "ADBE Vector Graphic - G-Fill": objects.shapes.GradientFill,
-        "ADBE Vector Graphic - G-Stroke": objects.shapes.GradientStroke,
+        "ADBE Vector Graphic - G-Fill": shape_with_defaults(
+            objects.shapes.GradientFill,
+            end_point=NVector(100, 0),
+            fill_rule=objects.shapes.FillRule.NonZero,
+        ),
+        "ADBE Vector Graphic - G-Stroke": shape_with_defaults(
+            objects.shapes.GradientStroke,
+            end_point=NVector(100, 0),
+        ),
 
         "ADBE Vector Filter - Merge": objects.shapes.Merge,
         "ADBE Vector Filter - Offset": objects.shapes.OffsetPath,
@@ -228,6 +235,7 @@ class AepConverter:
         "ADBE Vector Grad Start Pt": ("start_point", None),
         "ADBE Vector Grad End Pt": ("end_point", None),
         "ADBE Vector Grad Colors": ("colors", None),
+        "ADBE Vector Grad Type": ("gradient_type", objects.shapes.GradientType),
 
         "ADBE Vector Merge Type": ("merge_mode", objects.shapes.MergeMode),
 
