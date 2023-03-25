@@ -519,7 +519,7 @@ class PositionKeyframe(OffsetKeyframe):
     ]
 
     def __init__(self, time=0, value=None, easing_function=None, in_tan=None, out_tan=None, end=None):
-        super().__init__(self, time, value, easing_function, end)
+        super().__init__(time, value, easing_function, end)
         ## In Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
         self.in_tan = in_tan
         ## Out Spatial Tangent. Only for spatial properties. (for bezier smoothing on position)
