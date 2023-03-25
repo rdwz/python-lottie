@@ -262,7 +262,7 @@ class AnimatableMixin:
         self.animated = False
         self.keyframes = None
 
-    def add_keyframe(self, time, value, interp=easing.Linear(), *args, end=False, **kwargs):
+    def add_keyframe(self, time, value, interp=easing.Linear(), *args, end=None, **kwargs):
         """!
         @param time     The time this keyframe appears in
         @param value    The value the property should have at @p time
@@ -284,10 +284,10 @@ class AnimatableMixin:
                 self.keyframes[-1].end = value.clone()
 
         kf = self.keyframe_type(
-            time,
-            value,
-            None,
-            interp,
+            time=time,
+            value=value,
+            easing_function=interp,
+            end=end,
             *args,
             **kwargs
         )
@@ -326,6 +326,8 @@ class AnimatableMixin:
                 return val, None, None, None
             if k.end is not None:
                 val = k.end
+            elif k.value is not None:
+                val = k.value
         return val, None, None, None
 
     def to_dict(self):
