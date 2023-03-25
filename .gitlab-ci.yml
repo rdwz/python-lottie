@@ -11,6 +11,7 @@ variables:
 stages:
     - test
     - build
+    - deploy
 
 docs:
     stage: build
@@ -22,7 +23,8 @@ docs:
             - docs/html
 
 pages:
-    stage: build
+    stage: deploy
+    before_script:
     script:
         - mv docs/html public
         - ls -l . htmlcov
