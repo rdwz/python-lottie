@@ -420,7 +420,7 @@ class AepConverter:
                 )
 
                 if tdb4.position:
-                    kf.out_tan  = NVector(*aep_kf.pos_tan_out)
+                    kf.out_tan = NVector(*aep_kf.pos_tan_out)
                     kf.in_tan = NVector(*aep_kf.pos_tan_in)
 
                 if aep_kf.hold:
@@ -487,15 +487,15 @@ class AepConverter:
             out_y = []
 
             for i in range(tdb4.components):
-                in_x.append(1 - in_infl[k] / 100)
-                out_x.append(out_infl[k] / 100)
+                in_x.append(1 - in_infl[i] / 100)
+                out_x.append(out_infl[i] / 100)
 
                 y_normal = next_value[i] - kf.value[i]
                 if tdb4.color:
                     y_normal *= 255
 
-                if abs(y_normal)< 0.0000001:
-                    y_normal = 1;
+                if abs(y_normal) < 0.0000001:
+                    y_normal = 1
 
                 out_bez_y = out_speed[i] * out_infl[i] / 100
                 in_bez_y = in_speed[i] * in_infl[i] / 100
