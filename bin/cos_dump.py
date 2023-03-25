@@ -21,16 +21,18 @@ class IndirectEncoder(json.JSONEncoder):
 
 
 parser = argparse.ArgumentParser(
-    description="Dump an AEP file into sort of readable Yaml"
+    description="Dump a Carousel Object Storage file into sort of readable JSON"
 )
 parser.add_argument(
     "infile",
     help="Input file"
 )
 
-args = parser.parse_args()
+
+if __name__ == "__main__":
+    args = parser.parse_args()
 
 
-with open(args.infile, "rb") as f:
-    cosp = CosParser(f)
-    json.dump(cosp.parse(), sys.stdout, indent=4, cls=IndirectEncoder)
+    with open(args.infile, "rb") as f:
+        cosp = CosParser(f)
+        json.dump(cosp.parse(), sys.stdout, indent=4, cls=IndirectEncoder)

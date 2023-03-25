@@ -241,7 +241,7 @@ class PointDisplacer:
         return f * self.time_delta + self.time_start
 
     def _init_lerp(self, val_from, val_to, easing):
-        self._kf = properties.OffsetKeyframe(0, NVector(val_from), NVector(val_to), easing)
+        self._kf = properties.OffsetKeyframe(0, NVector(val_from), easing)
 
     def _lerp_get(self, offset):
         return self._kf.interpolated_value(offset / self.n_frames)[0]

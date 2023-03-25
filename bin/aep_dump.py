@@ -126,24 +126,26 @@ parser.add_argument(
     help="Output file name"
 )
 
-args = parser.parse_args()
 
-with open(args.infile, "rb") as f:
-    head = f.read(3)
-    f.seek(0)
+if __name__ == "__main__":
+    args = parser.parse_args()
 
-    if head == b'RIF':
-        aep_parser = AepParser(f)
-        root = aep_parser.parse()
-    else:
-        dom = ElementTree.parse(f)
-        aep_parser = AepParser(None)
-        root = aepx_to_chunk(dom.getroot(), aep_parser)
+    with open(args.infile, "rb") as f:
+        head = f.read(3)
+        f.seek(0)
 
-    with open(args.output or os.path.splitext(args.infile)[0]+".yml", "w") as of:
-        for chunk in root.data.children:
-            chunk_to_yaml(of, chunk, args.wrap_bytes, args.bytes)
+        if head == b'RIF':
+            aep_parser = AepParser(f)
+            root = aep_parser.parse()
+        else:
+            dom = ElementTree.parse(f)
+            aep_parser = AepParser(None)
+            root = aepx_to_chunk(dom.getroot(), aep_parser)
 
-        if args.xmp:
-            of.write("ProjectXMPMetadata: _\n")
-            of.write(f.read().decode("utf8"))
+        with open(args.output or os.path.splitext(args.infile)[0]+".yml", "w") as of:
+            for chunk in root.data.children:
+                chunk_to_yaml(of, chunk, args.wrap_bytes, args.bytes)
+
+            if args.xmp:
+                of.write("ProjectXMPMetadata: _\n")
+                of.write(f.read().decode("utf8"))

@@ -14,6 +14,7 @@ scripts = []
 
 for scriptfilename in os.listdir(scriptpath):
     if scriptfilename.endswith(".py") and not scriptfilename.startswith("__"):
+        print(scriptfilename)
         module = SourceFileLoader(
             os.path.splitext(scriptfilename)[0],
             os.path.join(scriptpath, scriptfilename)

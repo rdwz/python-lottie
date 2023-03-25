@@ -388,69 +388,72 @@ gatherers = {
     "sspc": GatherSspc,
 }
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(description="Diff for AEP chunk binary data")
 parser.add_argument("files", nargs="+")
 parser.add_argument("--what", "-w", default="tdb4")
 parser.add_argument("--group", "-g", default=[], action="append")
-args = parser.parse_args()
 
-# Gather Data
-data = set()
-const = CommonBytes()
-if args.what in gatherers:
-    gatherer = gatherers[args.what](args.what)
-else:
-    gatherer = GenericGatherer(args.what)
 
-for infile in args.files:
-    base = os.path.basename(infile)
-    sys.stderr.write("%s\n" % infile)
-    with open(infile, "rb") as f:
-        aep_parser = AepParser(f)
-        gatherer.process(base, aep_parser, data, const)
+if __name__ == "__main__":
+    args = parser.parse_args()
 
-const.finalize()
+    # Gather Data
+    data = set()
+    const = CommonBytes()
+    if args.what in gatherers:
+        gatherer = gatherers[args.what](args.what)
+    else:
+        gatherer = GenericGatherer(args.what)
 
-# Output Common bytes
-for i in range(0, len(const.common), 4):
-    for j in range(4):
-        if const.common[i+j] is None:
-            sys.stdout.write(".. ")
-        else:
-            sys.stdout.write("%02x " % const.common[i+j])
+    for infile in args.files:
+        base = os.path.basename(infile)
+        sys.stderr.write("%s\n" % infile)
+        with open(infile, "rb") as f:
+            aep_parser = AepParser(f)
+            gatherer.process(base, aep_parser, data, const)
+
+    const.finalize()
+
+    # Output Common bytes
+    for i in range(0, len(const.common), 4):
+        for j in range(4):
+            if const.common[i+j] is None:
+                sys.stdout.write(".. ")
+            else:
+                sys.stdout.write("%02x " % const.common[i+j])
+        sys.stdout.write("\n")
+
     sys.stdout.write("\n")
 
-sys.stdout.write("\n")
+    # Group
+    group_axes = gatherer.default_group if not args.group else args.group
+    items = {}
+    group_by(data, group_axes, items)
 
-# Group
-group_axes = gatherer.default_group if not args.group else args.group
-items = {}
-group_by(data, group_axes, items)
+    # Print output
+    for titles, group in sorted(items.items()):
+        print(" ".join(titles))
 
-# Print output
-for titles, group in sorted(items.items()):
-    print(" ".join(titles))
+        group_common = CommonBytes()
 
-    group_common = CommonBytes()
+        for prop in group.items:
+            unique = const.extract_diff(prop.raw)
+            group_common.add(unique)
 
-    for prop in group.items:
-        unique = const.extract_diff(prop.raw)
-        group_common.add(unique)
+        for item in group_common.common:
+            if item is None:
+                sys.stdout.write(".. ")
+            else:
+                sys.stdout.write("%02x " % item)
+        sys.stdout.write("\n")
 
-    for item in group_common.common:
-        if item is None:
-            sys.stdout.write(".. ")
-        else:
-            sys.stdout.write("%02x " % item)
-    sys.stdout.write("\n")
+        for prop in group.items:
+            for index in const.different_indexes:
+                try:
+                    sys.stdout.write("%02x " % prop.raw[index])
+                except IndexError:
+                    sys.stdout.write("   ")
 
-    for prop in group.items:
-        for index in const.different_indexes:
-            try:
-                sys.stdout.write("%02x " % prop.raw[index])
-            except IndexError:
-                sys.stdout.write("   ")
+            sys.stdout.write(" %s\n" % prop)
 
-        sys.stdout.write(" %s\n" % prop)
-
-    sys.stdout.write("\n\n")
+        sys.stdout.write("\n\n")

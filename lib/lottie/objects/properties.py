@@ -210,7 +210,7 @@ class OffsetKeyframe(Keyframe):
             return end
         if ratio == 0:
             return self.value
-        if self.in_tan and self.out_tan:
+        if isinstance(self, PositionKeyframe) and self.in_tan and self.out_tan:
             bezier = Bezier()
             bezier.add_point(self.value, NVector(0, 0), self.out_tan)
             bezier.add_point(end, self.in_tan, NVector(0, 0))
