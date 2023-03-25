@@ -74,7 +74,7 @@ class NVector():
 
     @property
     def length(self) -> float:
-        return math.hypot(self.components)
+        return math.hypot(*self.components)
 
     def dot(self, other):
         return sum(map(operator.mul, self.components, other.components))
