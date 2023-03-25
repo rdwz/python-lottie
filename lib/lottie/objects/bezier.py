@@ -537,12 +537,12 @@ class CubicBezierSegment:
         )
 
     def solve(self, t: float) -> NVector:
-        return ((self.a * t + self.b ) * t +  self.c ) * t + self. d
+        return ((self.a * t + self.b) * t + self.c) * t + self. d
 
     def length(self, steps: int = 20) -> float:
-        lenght = 0
+        length = 0
 
-        p = self.points[0];
+        p = self.points[0]
         for i in range(1, steps+1):
             t = i / steps
             q = self.solve(t)
