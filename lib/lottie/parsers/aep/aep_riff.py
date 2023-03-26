@@ -194,11 +194,24 @@ class AepParser(RiffParser):
         reader.read_attribute("comp_duration", 2, int)
         reader.skip(5)
         reader.read_attribute_array("color", 3, 1, int)
-        reader.skip(85)
+        reader.skip(84)
+
+        reader.read_attribute("attrs", 1, bytes)
+        reader.attr_bit("shy", 0, 0)
+        reader.attr_bit("motion_blur", 0, 3)
+        reader.attr_bit("frame_blending", 0, 4)
+
         reader.read_attribute("width", 2, int)
         reader.read_attribute("height", 2, int)
         reader.skip(12)
         reader.read_attribute("frame_rate", 2, int)
+        reader.skip(16)
+        reader.read_attribute("shutter_angle", 2, int)
+        reader.read_attribute("shutter_phase", 4, sint)
+        reader.skip(18)
+        reader.read_attribute("samples_limit", 2, int)
+        reader.skip(2)
+        reader.read_attribute("samples_per_frame", 2, int)
 
         reader.finalize()
         return reader.value
