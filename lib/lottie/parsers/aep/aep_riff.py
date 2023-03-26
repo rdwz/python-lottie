@@ -182,7 +182,9 @@ class AepParser(RiffParser):
     def read_cdta(self, length):
         reader = StructuredReader(self, length)
 
-        reader.skip(5)
+        reader.read_attribute("resolution_x", 2, int)
+        reader.read_attribute("resolution_y", 2, int)
+        reader.skip(1)
         reader.read_attribute("time_scale", 2, int)
         reader.skip(14)
         reader.read_attribute("playhead", 2, int)
@@ -200,18 +202,21 @@ class AepParser(RiffParser):
         reader.attr_bit("shy", 0, 0)
         reader.attr_bit("motion_blur", 0, 3)
         reader.attr_bit("frame_blending", 0, 4)
+        reader.attr_bit("preserve_framerate", 0, 5)
+        reader.attr_bit("preserve_resolution", 0, 7)
 
         reader.read_attribute("width", 2, int)
         reader.read_attribute("height", 2, int)
-        reader.skip(12)
+        reader.read_attribute("pixel_ratio_width", 4, int)
+        reader.read_attribute("pixel_ratio_height", 4, int)
+        reader.skip(4)
         reader.read_attribute("frame_rate", 2, int)
         reader.skip(16)
         reader.read_attribute("shutter_angle", 2, int)
         reader.read_attribute("shutter_phase", 4, sint)
-        reader.skip(18)
-        reader.read_attribute("samples_limit", 2, int)
-        reader.skip(2)
-        reader.read_attribute("samples_per_frame", 2, int)
+        reader.skip(16)
+        reader.read_attribute("samples_limit", 4, int)
+        reader.read_attribute("samples_per_frame", 4, int)
 
         reader.finalize()
         return reader.value
