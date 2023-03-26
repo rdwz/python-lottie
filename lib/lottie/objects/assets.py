@@ -5,7 +5,6 @@ import mimetypes
 from io import BytesIO
 from .base import LottieProp, PseudoBool, Index
 from .layers import Layer
-from .composition import Composition
 from .helpers import VisualObject
 
 
@@ -163,31 +162,16 @@ class Image(FileAsset):
 
 
 ## @ingroup Lottie
-class Precomp(Asset, Composition):
-    _props = [
-        LottieProp("frame_rate", "fr", float, False),
-    ]
-
-    def __init__(self, id="", animation=None):
-        super().__init__()
-        ## Precomp ID
-        self.id = id
-        self.animation = animation
-        if animation:
-            self.animation.assets.append(self)
-        self.name = None
-        self.frame_rate = None
-
-    def _on_prepare_layer(self, layer):
-        if self.animation:
-            self.animation.prepare_layer(layer)
-
-    def set_timing(self, outpoint, inpoint=0, override=True):
-        for layer in self.layers:
-            if override or layer.in_point is None:
-                layer.in_point = inpoint
-            if override or layer.out_point is None:
-                layer.out_point = outpoint
+## Back-wards compat constructor
+def Precomp(id="", project=None):
+    from .composition import Composition
+    precomp = Composition(None, None, None, None)
+    precomp.in_point = None
+    precomp.project = project
+    if project:
+        project.assets.append(precomp)
+        precomp.copy_attributes(project.main)
+    return precomp
 
 
 #ingroup Lottie
