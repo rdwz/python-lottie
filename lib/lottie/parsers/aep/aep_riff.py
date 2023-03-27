@@ -258,7 +258,8 @@ class AepParser(RiffParser):
         # 132
         reader.read_attribute("parent_id", 4, int)
         reader.skip(24)
-        reader.read_attribute("track_matte_id", 4, int)
+        if reader.to_read > 4:
+            reader.read_attribute("track_matte_id", 4, int)
 
         reader.finalize()
 
@@ -512,6 +513,50 @@ class AepParser(RiffParser):
         reader.skip(15)
         reader.read_attribute("type", 1, int)
         reader.read_attribute_string0("name", 32)
+        reader.skip(8)
+
+        if reader.value.type == 2: # Scalar
+            reader.read_attribute("last_value_int", 2, int)
+            reader.read_attribute("last_value_fract", 2, int)
+            reader.value.last_value = reader.value.last_value_int + reader.value.last_value_fract / 0x10000
+            reader.skip(4)
+            reader.skip(64)
+            reader.skip(4)
+            reader.read_attribute("min_value", 2, sint)
+            reader.skip(2)
+            reader.read_attribute("max_value", 2, sint)
+        elif reader.value.type == 4: # Boolean
+            reader.read_attribute("last_value", 4, int)
+            reader.read_attribute("default_value", 1, int)
+            reader.skip(3)
+            reader.skip(44)
+            reader.read_attribute("", 4, float)
+            reader.skip(4)
+            reader.read_attribute("", 4, float)
+        elif reader.value.type == 5: # Color
+            reader.read_attribute_array("last_value", 4, 1, int)
+            reader.read_attribute_array("default_value", 4, 1, int)
+            reader.skip(64)
+            reader.read_attribute_array("max_value", 4, 1, int)
+        elif reader.value.type == 6: # 2D
+            reader.read_attribute("last_value_x", 4, sint)
+            reader.read_attribute("last_value_y", 4, sint)
+            reader.value.last_value = NVector(reader.value.last_value_x, reader.value.last_value_y) / 0x80
+        elif reader.value.type == 7: # Enum
+            reader.read_attribute("last_value", 4, int)
+            reader.skip(2)
+            reader.read_attribute("default_value", 2, int)
+            reader.skip(44)
+            reader.read_attribute("", 4, float)
+            reader.skip(4)
+            reader.read_attribute("", 4, float)
+        elif reader.value.type == 10: # Slider
+            reader.read_attribute("last_value", 8, float)
+            reader.skip(44)
+            reader.read_attribute("", 4, float)
+            reader.skip(4)
+            reader.read_attribute("max_value", 4, float)
+
         reader.finalize()
         return reader.value
 
