@@ -85,6 +85,8 @@ class AepParser(RiffParser):
             "pard": AepParser.read_pard,
             "btdk": AepParser.read_btdk,
             "NmHd": AepParser.read_nmhd,
+            "tdpi": AepParser.read_number,
+            "tdps": lambda self, len: self.endian.decode_2comp(self.file.read(len))
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
@@ -151,6 +153,7 @@ class AepParser(RiffParser):
 
         reader.attr_bit("no_value", 1, 0, "type")
         reader.attr_bit("color", 3, 0, "type")
+        reader.attr_bit("layer", 3, 2, "type")
         data = reader.value
 
         self.prop_dimension = data.components
@@ -515,7 +518,7 @@ class AepParser(RiffParser):
         reader.read_attribute_string0("name", 32)
         reader.skip(8)
 
-        if reader.value.type == 2: # Scalar
+        if reader.value.type == 2 or reader.value.type == 3: # Scalar / Angle
             reader.read_attribute("last_value_int", 2, int)
             reader.read_attribute("last_value_fract", 2, int)
             reader.value.last_value = reader.value.last_value_int + reader.value.last_value_fract / 0x10000
@@ -544,7 +547,7 @@ class AepParser(RiffParser):
             reader.value.last_value = NVector(reader.value.last_value_x, reader.value.last_value_y) / 0x80
         elif reader.value.type == 7: # Enum
             reader.read_attribute("last_value", 4, int)
-            reader.skip(2)
+            reader.read_attribute("option_count", 2, int)
             reader.read_attribute("default_value", 2, int)
             reader.skip(44)
             reader.read_attribute("", 4, float)
@@ -556,6 +559,17 @@ class AepParser(RiffParser):
             reader.read_attribute("", 4, float)
             reader.skip(4)
             reader.read_attribute("max_value", 4, float)
+        elif reader.value.type == 18: # 3D Point
+            reader.read_attribute("last_value_x", 8, float)
+            reader.read_attribute("last_value_y", 8, float)
+            reader.read_attribute("last_value_z", 8, float)
+            reader.value.last_value = NVector(
+                reader.value.last_value_x,
+                reader.value.last_value_y,
+                reader.value.last_value_z
+            ) * 512
+            reader.read_attribute("", 8, float)
+            reader.read_attribute("", 8, float)
 
         reader.finalize()
         return reader.value
