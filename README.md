@@ -243,7 +243,7 @@ follows a table listing dependencies and features
 | `coverage`                                    |       | To show unit test coverage, used optionally by `test.sh`  |
 
 
-If intalling from pip, you can install optional requirements like so:
+If installing from pip, you can install optional requirements like so:
 
     pip install lottie[GIF]
 
