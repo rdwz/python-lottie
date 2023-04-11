@@ -316,7 +316,8 @@ class GatherRawTop(Gatherer):
     default_group = []
 
     def gather(self, filename, chunk, data, const):
-        if chunk.header == self.header:
+        chunk = chunk.data.find(self.header)
+        if chunk:
             const.add(chunk.data)
             data.add(Prop(chunk.data, filename=filename))
 

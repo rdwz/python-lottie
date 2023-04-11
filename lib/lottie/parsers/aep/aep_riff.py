@@ -86,7 +86,10 @@ class AepParser(RiffParser):
             "btdk": AepParser.read_btdk,
             "NmHd": AepParser.read_nmhd,
             "tdpi": AepParser.read_number,
-            "tdps": lambda self, len: self.endian.decode_2comp(self.file.read(len))
+            "tdps": lambda self, len: self.endian.decode_2comp(self.file.read(len)),
+            "tdli": AepParser.read_number,
+            "cmta": AepParser.read_mn,
+            "mkif": AepParser.read_mkif,
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
@@ -153,7 +156,7 @@ class AepParser(RiffParser):
 
         reader.attr_bit("no_value", 1, 0, "type")
         reader.attr_bit("color", 3, 0, "type")
-        reader.attr_bit("layer", 3, 2, "type")
+        reader.attr_bit("integer", 3, 2, "type")
         data = reader.value
 
         self.prop_dimension = data.components
@@ -519,9 +522,8 @@ class AepParser(RiffParser):
         reader.skip(8)
 
         if reader.value.type == 2 or reader.value.type == 3: # Scalar / Angle
-            reader.read_attribute("last_value_int", 2, int)
-            reader.read_attribute("last_value_fract", 2, int)
-            reader.value.last_value = reader.value.last_value_int + reader.value.last_value_fract / 0x10000
+            reader.read_attribute("last_value", 4, sint)
+            reader.value.last_value = reader.value.last_value / 0x10000
             reader.skip(4)
             reader.skip(64)
             reader.skip(4)
@@ -589,4 +591,13 @@ class AepParser(RiffParser):
         reader.finalize()
 
         reader.attr_bit("protected", 0, 1)
+        return reader.value
+
+    def read_mkif(self, length):
+        reader = StructuredReader(self, length)
+        reader.read_attribute("inverted", 1, int)
+        reader.read_attribute("locked", 1, int)
+        reader.skip(4)
+        reader.read_attribute("mode", 2, int)
+        reader.finalize()
         return reader.value
