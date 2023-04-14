@@ -419,10 +419,6 @@ class AepConverter:
                     policy.keyframe(aep_kf, index)
                 )
 
-                if tdb4.position:
-                    kf.out_tan = NVector(*aep_kf.pos_tan_out)
-                    kf.in_tan = NVector(*aep_kf.pos_tan_in)
-
                 if aep_kf.hold:
                     kf.hold = True
                 elif not aep_kf.ease:
@@ -433,15 +429,27 @@ class AepConverter:
         if len(prop.keyframes) == 1:
             prop.clear_animation(prop.keyframes[0].start)
 
+    def _keyframe_pos_tan(self, length, tan):
+        if len(tan) > length:
+            tan = tan[:length]
+        else:
+            tan = tan + ([0] * length - len(tan))
+        return NVector(tan)
+
     def keyframe_ease(self, policy, aep_kf, kf, keyframes, index, tdb4):
         next_i = (index + 1) % len(keyframes)
         next_aep_kf = keyframes[next_i]
         next_value = policy.keyframe(next_aep_kf, next_i)
 
+        if tdb4.position:
+            kf.out_tan = self._keyframe_pos_tan(len(kf.value), aep_kf.pos_tan_out)
+            kf.in_tan = self._keyframe_pos_tan(len(kf.value), next_aep_kf.pos_tan_in)
+
+
         next_time = self.time(next_aep_kf.time)
         duration = next_time - kf.time
         if duration == 0:
-            return objects.easing.Linear()
+            return objects.easing.Linear()(kf)
 
         in_infl = next_aep_kf.in_influence
         in_speed = next_aep_kf.in_speed
@@ -460,7 +468,7 @@ class AepConverter:
             else:
                 curve_length = objects.bezier.CubicBezierSegment(
                     kf.value, kf.out_tan, kf.in_tan, next_value
-                )
+                ).length
             average_speed = curve_length / duration
             if curve_length == 0:
                 out_bez = out_infl / 100
@@ -504,7 +512,7 @@ class AepConverter:
 
             kf.in_value.x = in_x
             kf.in_value.y = in_y
-            kf.in_value.x = out_x
+            kf.out_value.x = out_x
             kf.out_value.y = out_y
 
     def parse_property_shape(self, object, match_name, chunk):
