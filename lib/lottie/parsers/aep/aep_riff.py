@@ -26,6 +26,17 @@ class KeyframeType(enum.Enum):
     Color = enum.auto()
 
 
+
+class EssentialType(enum.Enum):
+    Scalar = 2
+    Color = 4
+    Position = 5
+    Comment = 8
+    MultiDimensional = 9
+    Group = 10
+    Enum = 13
+
+
 class AepParser(RiffParser):
     utf8_containers = ["tdsn", "fnam", "pdnm"]
 
@@ -75,6 +86,7 @@ class AepParser(RiffParser):
             "CsCt": AepParser.read_number,
             "CapL": AepParser.read_number,
             "CcCt": AepParser.read_number,
+            "CprC": AepParser.read_number,
             "mrid": AepParser.read_number,
             "numS": AepParser.read_number,
             "shph": AepParser.read_shph,
@@ -90,6 +102,18 @@ class AepParser(RiffParser):
             "tdli": AepParser.read_number,
             "cmta": AepParser.read_mn,
             "mkif": AepParser.read_mkif,
+            "blsv": AepParser.read_number,
+            "blsi": AepParser.read_number,
+            "CCId": AepParser.read_number,
+            "CLId": AepParser.read_number,
+            "CTyp": AepParser.read_number,
+            "CDim": AepParser.read_number,
+            "CTyp": AepParser.read_ctyp,
+            "StVS": AepParser.read_stvs,
+            "Smin": AepParser.read_essential_value,
+            "Smax": AepParser.read_essential_value,
+            "CVal": AepParser.read_essential_value,
+            "CDef": AepParser.read_essential_value,
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
@@ -101,6 +125,7 @@ class AepParser(RiffParser):
         self.keyframe_type = KeyframeType.MultiDimensional
         self.ldat_size = 0
         self.keep_ldat_bytes = False
+        self.essential_type = EssentialType.MultiDimensional
 
     def read_shph(self, length):
         reader = StructuredReader(self, length)
@@ -330,17 +355,17 @@ class AepParser(RiffParser):
         reader.skip(1)
         reader.read_attribute("time", 2, int)
         reader.skip(2)
-        reader.read_attribute("attrs", 1, bytes)
+        reader.read_attribute("ease_mode", 1, int)
         reader.read_attribute("color", 1, int)
-        reader.read_attribute("attrs2", 1, bytes)
+        reader.read_attribute("attrs", 1, bytes)
 
-        reader.attr_bit("linear", 0, 0)
-        reader.attr_bit("ease", 0, 1)
-        reader.attr_bit("hold", 0, 2)
+        reader.value.linear = reader.value.ease_mode == 1
+        reader.value.hold = reader.value.ease_mode == 2
+        reader.value.ease = reader.value.ease_mode == 3
 
-        reader.attr_bit("continuous_bezier", 0, 3, "attrs2")
-        reader.attr_bit("auto_bezier", 0, 4, "attrs2")
-        reader.attr_bit("roving", 0, 5, "attrs2")
+        reader.attr_bit("continuous_bezier", 0, 3)
+        reader.attr_bit("auto_bezier", 0, 4)
+        reader.attr_bit("roving", 0, 5)
 
         return reader
 
@@ -601,3 +626,33 @@ class AepParser(RiffParser):
         reader.read_attribute("mode", 2, int)
         reader.finalize()
         return reader.value
+
+    def read_ctyp(self, length):
+        data = self.read_number(length)
+        self.essential_type = EssentialType(data)
+        return data
+
+    def read_stvs(self, length):
+        reader = StructuredReader(self, length)
+        reader.read_attribute("count", 1, int)
+        reader.finalize()
+        return reader.value
+
+    def read_essential_value(self, length):
+        reader = StructuredReader(self, length)
+
+        if self.essential_type == EssentialType.Scalar:
+            reader.read_attribute("value", 8, float)
+        elif self.essential_type == EssentialType.Color:
+            reader.read_attribute_array("value", 4, 4, float)
+        elif self.essential_type == EssentialType.Position:
+            reader.read_attribute_array("value", 2, 8, float)
+        elif self.essential_type == EssentialType.MultiDimensional:
+            reader.read_attribute_array("value", 4, 8, float)
+        elif self.essential_type == EssentialType.Enum:
+            reader.read_attribute("value", 4, int)
+        else:
+            return self.read(length)
+
+        reader.finalize()
+        return reader.value.value
