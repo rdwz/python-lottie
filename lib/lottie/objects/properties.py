@@ -253,6 +253,8 @@ class AnimatableMixin:
         self.keyframes = None
         ## Expression
         self.expression = None
+        ## Slot name
+        self.slot_id = None
 
     def clear_animation(self, value):
         """!
@@ -488,6 +490,7 @@ class MultiDimensional(AnimatableMixin, LottieObject):
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", OffsetKeyframe, True, prop_animated),
         LottieProp("expression", "x", str, False),
+        LottieProp("slot_id", "sid", str, False),
     ]
 
     def get_tangent_angle(self, time=0):
@@ -575,6 +578,7 @@ class ColorValue(AnimatableMixin, LottieObject):
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", OffsetKeyframe, True, prop_animated),
         LottieProp("expression", "x", str, False),
+        LottieProp("slot_id", "sid", str, False),
     ]
 
 
@@ -732,6 +736,7 @@ class Value(AnimatableMixin, LottieObject):
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", keyframe_type, True, prop_animated),
         LottieProp("expression", "x", str, False),
+        LottieProp("slot_id", "sid", str, False),
     ]
 
     def __init__(self, value=0):
@@ -806,6 +811,7 @@ class ShapeProperty(AnimatableMixin, LottieObject):
         LottieProp("property_index", "ix", float, False),
         LottieProp("animated", "a", PseudoBool, False),
         LottieProp("keyframes", "k", keyframe_type, True, prop_animated),
+        LottieProp("slot_id", "sid", str, False),
     ]
 
     def __init__(self, bezier=None):

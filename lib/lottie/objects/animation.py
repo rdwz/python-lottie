@@ -35,7 +35,7 @@ class Metadata(LottieObject):
         self.theme_color = None
 
 
-#ingroup Lottie
+## @ingroup Lottie
 class UserMetadata(LottieObject):
     """!
     User-defined metadata
@@ -52,7 +52,7 @@ class UserMetadata(LottieObject):
         self.custom_properties = {}
 
 
-#ingroup Lottie
+## @ingroup Lottie
 class MotionBlur(LottieObject):
     """!
     Motion blur settings
@@ -74,6 +74,24 @@ class MotionBlur(LottieObject):
         self.samples_per_frame = None
         self.adaptive_sample_limit = None
 
+
+## @ingroup Lottie
+class PropertySlots(LottieObject):
+    def __init__(self):
+        self.slots = {}
+
+    def __setattr__(self, name, value):
+        self.slots[name] = value
+
+    def __getattr__(self, name):
+        return self.slots[name]
+
+
+    def to_dict(self):
+        return {
+            name: value.to_dict()
+            for name, value in self.slots.items()
+        }
 
 ## @ingroup Lottie
 class Animation(Composition, VisualObject):
@@ -98,6 +116,7 @@ class Animation(Composition, VisualObject):
         LottieProp("motion_blur", "mb", MotionBlur, False),
         LottieProp("metadata", "meta", Metadata, False),
         LottieProp("user_metadata", "metadata", UserMetadata, False),
+        LottieProp("slots", "slots", PropertySlots, False),
     ]
     _version = "5.5.2"
 
@@ -130,6 +149,7 @@ class Animation(Composition, VisualObject):
         self.user_metadata = None
         self.motion_blur = None
         self.markers = None
+        self.slots = PropertySlots()
 
     def precomp(self, name):
         for ass in self.assets:
