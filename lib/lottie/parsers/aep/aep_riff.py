@@ -114,6 +114,7 @@ class AepParser(RiffParser):
             "Smax": AepParser.read_essential_value,
             "CVal": AepParser.read_essential_value,
             "CDef": AepParser.read_essential_value,
+            "fips": AepParser.read_fips,
         }
         for ch in self.utf8_containers:
             self.chunk_parsers[ch] = RiffParser.read_sub_chunks
@@ -658,3 +659,13 @@ class AepParser(RiffParser):
 
         reader.finalize()
         return reader.value.value
+
+
+    def read_fips(self, length):
+        reader = StructuredReader(self, length)
+        reader.skip(12)
+        reader.skip(3)
+        reader.read_attribute("attrs", 1, bytes)
+        reader.attr_bit("alpha_grid", 0, 7)
+        reader.finalize()
+        return reader.value
