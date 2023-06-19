@@ -318,6 +318,8 @@ class AepParser(RiffParser):
         reader.read_attribute("type", 2, int)
         reader.skip(14)
         reader.read_attribute("id", 4, int)
+        reader.skip(38)
+        reader.read_attribute("color", 1, int)
 
         reader.finalize()
 
