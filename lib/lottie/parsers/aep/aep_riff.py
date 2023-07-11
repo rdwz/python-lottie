@@ -259,8 +259,9 @@ class AepParser(RiffParser):
         reader.read_attribute("layer_id", 4, int)
         # 4
         reader.read_attribute("quality", 2, int)
-        # 6
-        reader.skip(7)
+        reader.skip(4)
+        reader.read_attribute("stretch_numerator", 2, int)
+        reader.skip(1)
         reader.read_attribute("start_time", 2, sint)
         reader.skip(6)
         # 21
@@ -284,7 +285,9 @@ class AepParser(RiffParser):
         # 96
         reader.skip(11)
         reader.read_attribute("matte_mode", 1, int)
-        reader.skip(23)
+        reader.skip(2)
+        reader.read_attribute("stretch_denominator", 2, int)
+        reader.skip(19)
         # 131
         reader.read_attribute("type", 1, int)
         # 132
