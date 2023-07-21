@@ -92,6 +92,7 @@ class PropertySlots(LottieObject):
             for name, value in self.slots.items()
         }
 
+
 ## @ingroup Lottie
 class Animation(Composition, VisualObject):
     """!

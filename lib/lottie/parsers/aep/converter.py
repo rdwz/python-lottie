@@ -445,7 +445,6 @@ class AepConverter:
             kf.out_tan = self._keyframe_pos_tan(len(kf.value), aep_kf.pos_tan_out)
             kf.in_tan = self._keyframe_pos_tan(len(kf.value), next_aep_kf.pos_tan_in)
 
-
         next_time = self.time(next_aep_kf.time)
         duration = next_time - kf.time
         if duration == 0:

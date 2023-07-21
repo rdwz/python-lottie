@@ -26,7 +26,6 @@ class KeyframeType(enum.Enum):
     Color = enum.auto()
 
 
-
 class EssentialType(enum.Enum):
     Scalar = 2
     Color = 4
@@ -106,7 +105,6 @@ class AepParser(RiffParser):
             "blsi": AepParser.read_number,
             "CCId": AepParser.read_number,
             "CLId": AepParser.read_number,
-            "CTyp": AepParser.read_number,
             "CDim": AepParser.read_number,
             "CTyp": AepParser.read_ctyp,
             "StVS": AepParser.read_stvs,
@@ -662,7 +660,6 @@ class AepParser(RiffParser):
 
         reader.finalize()
         return reader.value.value
-
 
     def read_fips(self, length):
         reader = StructuredReader(self, length)
