@@ -148,7 +148,7 @@ class Animation(Composition, VisualObject):
         self.user_metadata = None
         self.motion_blur = None
         self.markers = None
-        self.slots = PropertySlots()
+        self.slots = None
 
     def precomp(self, name):
         for ass in self.assets:
