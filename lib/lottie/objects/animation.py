@@ -78,14 +78,13 @@ class MotionBlur(LottieObject):
 ## @ingroup Lottie
 class PropertySlots(LottieObject):
     def __init__(self):
-        self.slots = {}
+        self.__dict__["slots"] = {}
 
     def __setattr__(self, name, value):
         self.slots[name] = value
 
     def __getattr__(self, name):
         return self.slots[name]
-
 
     def to_dict(self):
         return {
