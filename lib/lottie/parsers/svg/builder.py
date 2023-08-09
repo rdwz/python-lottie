@@ -342,7 +342,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
         ))
 
     def _split_stroke(self, group, fill_layer, out_parent):
-        if not group.stroke:# or group.stroke_above:
+        if not group.stroke: # or group.stroke_above:
             return
 
         style = self._get_group_stroke(group)
