@@ -99,7 +99,7 @@ def write_int(file, v):
 
 def write_float(file, v):
     bits = struct.unpack(">i", struct.pack(">f", v))[0]
-    bits = ctypes.c_uint32((bits >> 23) | (bits << 9)).value;
+    bits = ctypes.c_uint32((bits >> 23) | (bits << 9)).value
 
     if (bits & 0xff) == 0:
         file.write(b'\0')
@@ -202,7 +202,7 @@ class Field:
             read_item = self.type.read_value
         else:
             definition = schema.definitions[self.type]
-            read_item = lambda file: schema.read_value(file, definition)
+            read_item = lambda file: definition.read_data(file, schema)
 
         if self.is_array:
             return read_array(file, read_item)
@@ -217,10 +217,10 @@ class Field:
             write_item = self.type.write_value
         else:
             definition = schema.definitions[self.type]
-            write_item = lambda file, v: schema.write_value(file, definition, v)
+            write_item = lambda file, v: definition.write_data(file, schema, v)
 
         if self.is_array:
-            return write_array(file, write_item, v)
+            return write_array(file, v, write_item)
 
         return write_item(file, v)
 
@@ -248,11 +248,17 @@ class Field:
 def write_binary_schema(file, v):
     v.write_binary_schema(file)
 
+
+def get_item(dict, key):
+    return dict[key]
+
+
 class Definition:
     def __init__(self):
         self.name = ""
         self.type = None
         self.fields = []
+        self.field_by_id = {}
         self.python_type = None
 
     def compile(self, schema):
@@ -274,6 +280,7 @@ class Definition:
                 py_type = field.type.to_python_type()
 
             fields.append((field.name, py_type, field.value))
+            self.field_by_id[field.value] = field
 
         if self.type == DefinitionType.Struct:
             self.python_type = dataclasses.make_dataclass(
@@ -311,6 +318,61 @@ class Definition:
         write_byte(file, self.type.value)
         write_array(file, self.fields, write_binary_schema)
 
+    def read_data(self, file, schema):
+        if self.type == DefinitionType.Enum:
+            return self.python_type(read_uint(file))
+
+        if self.type == DefinitionType.Struct:
+            kw = {}
+            for field in self.fields:
+                kw[field.name] = field.read_value(file, schema)
+            return self.python_type(**kw)
+
+        if self.type == DefinitionType.Message:
+            val = self.python_type()
+            while True:
+                field_id = read_uint(file)
+                if field_id == 0:
+                    break
+                field = self.field_by_id[field_id]
+                setattr(val, field.name, field.read_value(file, schema))
+            return val
+
+    def write_data(self, file, schema, v):
+        if self.type == DefinitionType.Enum:
+            if isinstance(v, str):
+                v = self.python_type[v]
+            if not isinstance(v, int):
+                v = v.value
+            write_uint(file, v)
+        elif self.type == DefinitionType.Struct:
+            if isinstance(v, dict):
+                getter = get_item
+            else:
+                getter = getattr
+
+            for field in self.fields:
+                fv = getter(v, field.name)
+                field.write_value(file, schema, fv)
+
+        elif self.type == DefinitionType.Message:
+            if isinstance(v, dict):
+                getter = get_item
+            else:
+                getter = getattr
+
+            for field in self.fields:
+                try:
+                    fv = getter(v, field.name)
+                except Exception:
+                    fv = None
+
+                if fv is not None:
+                    write_uint(file, field.value)
+                    field.write_value(file, schema, fv)
+
+                file.write(b'\0')
+
     def __str__(self):
         return "%s %s" % (self.type.name.lower(), self.name)
 
@@ -341,14 +403,6 @@ class Schema:
                 field.type = FieldType.Uint
         return definition
 
-    def read_data(self, file, definition):
-        if definition.type == DefinitionType.Enum:
-            return definition.python_type(read_uint(file))
-
-        val = definition.python_type()
-        for field in fields:
-            setattr(val, field.name, field.read_value(file, self))
-
     def type_name(self, type):
         if isinstance(type, Field):
             base = self.type_name(type.type)
@@ -363,3 +417,11 @@ class Schema:
     def write_text_schema(self, file):
         for definition in self.definitions:
             definition.write_text_schema(file, self)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.definitions[key]
+        for d in self.definitions:
+            if d.name == key:
+                return d
+        raise KeyError(key)
