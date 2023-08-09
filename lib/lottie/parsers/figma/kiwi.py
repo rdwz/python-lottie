@@ -184,11 +184,26 @@ class FieldType(enum.Enum):
 
 
 class Field:
+    keywords = {"if", "in" "def", "else", "elif", "from", "import", "class", "lambda"}
+
     def __init__(self):
-        self.name = ""
+        self._name = ""
         self.type = None
         self.is_array = False
         self.value = 0
+        self.original_name = ""
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, v):
+        self.original_name = v
+        self._name = v
+        if v in self.keywords:
+            self._name += "_"
+
 
     @property
     def is_byte_array(self):
@@ -236,7 +251,7 @@ class Field:
         return field
 
     def write_binary_schema(self, file):
-        write_string(file, self.name)
+        write_string(file, self.original_name)
         write_int(file, self.type.value if isinstance(self.type, FieldType) else self.type)
         write_bool(file, self.is_array)
         write_uint(file, self.value)
@@ -303,13 +318,13 @@ class Definition:
         file.write("\n%s %s {\n" % (self.type.name.lower(), self.name))
         if self.type == DefinitionType.Enum:
             for field in self.fields:
-                file.write("    %s = %s;\n" % (field.name, field.value))
+                file.write("    %s = %s;\n" % (field.original_name, field.value))
         elif self.type == DefinitionType.Struct:
             for field in self.fields:
-                file.write("    %s %s;\n" % (schema.type_name(field), field.name))
+                file.write("    %s %s;\n" % (schema.type_name(field), field.original_name))
         elif self.type == DefinitionType.Message:
             for field in self.fields:
-                file.write("    %s %s = %s;\n" % (schema.type_name(field), field.name, field.value))
+                file.write("    %s %s = %s;\n" % (schema.type_name(field), field.original_name, field.value))
 
         file.write("}\n")
 
@@ -425,3 +440,23 @@ class Schema:
             if d.name == key:
                 return d
         raise KeyError(key)
+
+
+def json_encode(v):
+    if hasattr(type(v), "__slots__"):
+        out = {}
+        for slot in v.__slots__:
+            s = getattr(v, slot)
+            if s is not None:
+                out[slot] = s
+        return out
+    elif isinstance(v, enum.Enum):
+        return v.name
+    elif isinstance(v, bytes):
+        return list(v)
+    else:
+        out = {}
+        for k, s in vars(v).items():
+            if s is not None:
+                out[k] = s
+        return out

@@ -2,14 +2,13 @@
 import os
 import sys
 import json
-import enum
 import pathlib
 import argparse
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "lib"
 ))
-from lottie.parsers.figma.kiwi import Schema
+from lottie.parsers.figma.kiwi import Schema, json_encode
 
 
 parser = argparse.ArgumentParser(
@@ -53,29 +52,20 @@ with open(args.schema, "rb") as f:
 
 root = schema[args.root]
 
+
 def open_output(mode):
     if args.output is None:
         return os.fdopen(sys.stdout.fileno(), mode, closefd=False)
     else:
         return open(args.output, mode)
 
+
 if args.decode:
     with open(args.data, "rb") as f:
         data = root.read_data(f, schema)
 
-    def encode(v):
-        if hasattr(type(v), "__slots__"):
-            out = {}
-            for slot in v.__slots__:
-                out[slot] = getattr(v, slot)
-            return out
-        elif isinstance(v, enum.Enum):
-            return v.name
-        else:
-            return vars(v)
-
     with open_output("w") as f:
-        json.dump(data, f, indent=4, default=encode)
+        json.dump(data, f, indent=4, default=json_encode)
 else:
     with open(args.data, "r") as f:
         data = json.load(f)
