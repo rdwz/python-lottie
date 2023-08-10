@@ -80,3 +80,13 @@ def script_main(animation, basename=None, path="/tmp", formats=["html"], verbosi
         parser = _get_parser(caller, basename, path, formats, verbosity)
         strip(animation)
         run(animation, parser.parse_args())
+
+
+def open_output(path, mode="w"):
+    """
+    Opens stdout or the given path
+    """
+    if path is None or path == "-":
+        return os.fdopen(sys.stdout.fileno(), mode, closefd=False)
+    else:
+        return open(path, mode)

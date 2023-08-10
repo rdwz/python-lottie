@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(
     "lib"
 ))
 from lottie.parsers.figma.kiwi import Schema, json_encode
+from lottie.utils.script import open_output
 
 
 parser = argparse.ArgumentParser(
@@ -53,22 +54,15 @@ with open(args.schema, "rb") as f:
 root = schema[args.root]
 
 
-def open_output(mode):
-    if args.output is None:
-        return os.fdopen(sys.stdout.fileno(), mode, closefd=False)
-    else:
-        return open(args.output, mode)
-
-
 if args.decode:
     with open(args.data, "rb") as f:
         data = root.read_data(f, schema)
 
-    with open_output("w") as f:
+    with open_output(args.output, "w") as f:
         json.dump(data, f, indent=4, default=json_encode)
 else:
     with open(args.data, "r") as f:
         data = json.load(f)
 
-    with open_output("wb") as f:
+    with open_output(args.output, "wb") as f:
         root.write_data(f, schema, data)

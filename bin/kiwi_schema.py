@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(
     "lib"
 ))
 from lottie.parsers.figma.kiwi import Schema
+from lottie.utils.script import open_output
 
 
 parser = argparse.ArgumentParser(
@@ -39,16 +40,8 @@ with open(args.schema, "rb") as f:
 
 
 if args.binary:
-    if args.output is None:
-        out = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
-    else:
-        out = open(args.output, "wb")
-
-    with out as f:
+    with open_output(args.output, "wb") as f:
         schema.write_binary_schema(f)
 else:
-    if args.output is None:
-        schema.write_text_schema(sys.stdout)
-    else:
-        with open(args.output, "w") as f:
-            schema.write_text_schema(f)
+    with open_output(args.output, "w") as f:
+        schema.write_text_schema(f)

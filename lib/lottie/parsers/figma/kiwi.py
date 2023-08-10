@@ -245,7 +245,10 @@ class Field:
         field.name = read_string(file)
         field.type = read_int(file)
         if field.type < 0:
-            field.type = FieldType(field.type)
+            try:
+                field.type = FieldType(field.type)
+            except ValueError:
+                pass
         field.is_array = read_bool(file)
         field.value = read_uint(file)
         return field
@@ -313,6 +316,8 @@ class Definition:
                 self.name,
                 [(f[0], typing.Optional[f[1]], dataclasses.field(default=None)) for f in fields],
             )
+
+        setattr(schema.module, self.name, self.python_type)
 
     def write_text_schema(self, file, schema):
         file.write("\n%s %s {\n" % (self.type.name.lower(), self.name))
@@ -395,9 +400,13 @@ class Definition:
         return "<Definition %s>" % self
 
 
+class Module:
+    pass
+
 class Schema:
     def __init__(self):
         self.definitions = []
+        self.module = Module()
 
     def read_binary_schema(self, file):
         self.definitions = read_array(file, self.read_binary_schema_definition)

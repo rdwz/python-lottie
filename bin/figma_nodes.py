@@ -15,7 +15,7 @@ from lottie.utils.script import open_output
 
 
 parser = argparse.ArgumentParser(
-    description="Extract data from a figma file"
+    description="Extract node changes from a figma file"
 )
 parser.add_argument(
     "--output",
@@ -24,11 +24,10 @@ parser.add_argument(
     help="Path to write the data to",
 )
 parser.add_argument(
-    "--schema",
-    "-s",
-    default=None,
-    type=pathlib.Path,
-    help="Path to write the text schema to",
+    "--append",
+    "-a",
+    action="store_true",
+    help="If present, append to existing data",
 )
 parser.add_argument(
     "file",
@@ -42,10 +41,16 @@ with open(args.file, "rb") as f:
     file = FigmaFile()
     file.load(f)
 
+unique = {}
 
-with open_output(args.output, "w") as f:
-    json.dump(file.data, f, indent=4, default=json_encode)
 
-if args.schema:
-    with open(args.schema, "w") as f:
-        file.schema.write_text_schema(f)
+if args.append and args.output and pathlib.Path(args.output).exists:
+    with open(args.output) as f:
+        unique = json.load(f)
+
+for change in file.data.nodeChanges:
+    if change.type.name not in unique:
+        unique[change.type.name] = change
+
+with open_output(args.output) as f:
+    json.dump(unique, f, indent=4, default=json_encode)
