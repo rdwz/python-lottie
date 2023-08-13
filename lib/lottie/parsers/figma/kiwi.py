@@ -2,6 +2,7 @@ import enum
 import struct
 import ctypes
 import typing
+import inspect
 import dataclasses
 
 
@@ -136,6 +137,11 @@ class DefinitionType(enum.Enum):
     Message = 2
 
 
+# TODO: Do the same for byte?
+class uint(int):
+    pass
+
+
 class FieldType(enum.Enum):
     Bool = -1
     Byte = -2
@@ -147,7 +153,9 @@ class FieldType(enum.Enum):
     def to_python_type(self):
         if self == FieldType.Bool:
             return bool
-        if self in (FieldType.Byte, FieldType.Int, FieldType.Uint):
+        if self == FieldType.Uint:
+            return uint
+        if self in (FieldType.Byte, FieldType.Int):
             return int
         if self == FieldType.Float:
             return float
@@ -300,6 +308,9 @@ class Definition:
             fields.append((field.name, py_type, field.value))
             self.field_by_id[field.value] = field
 
+        if self.python_type:
+            return
+
         if self.type == DefinitionType.Struct:
             self.python_type = dataclasses.make_dataclass(
                 self.name,
@@ -337,6 +348,27 @@ class Definition:
         write_string(file, self.name)
         write_byte(file, self.type.value)
         write_array(file, self.fields, write_binary_schema)
+
+    def write_python_schema(self, file, schema):
+        ind = " " * 4
+        file.write("\n")
+
+        if self.type == DefinitionType.Enum:
+            file.write("class %s(enum.Enum):\n" % self.name)
+            for field in self.fields:
+                file.write("%s%s = %s\n" % (ind, field.name, field.value))
+        elif self.type == DefinitionType.Struct:
+            file.write("@dataclasses.dataclass(slots=True)\n")
+            file.write("class %s:\n" % self.name)
+            for field in self.fields:
+                file.write("%s%s: %s\n" % (ind, field.name, schema.python_type_string(field)))
+        elif self.type == DefinitionType.Message:
+            file.write("@dataclasses.dataclass\n")
+            file.write("class %s:\n" % self.name)
+            for field in self.fields:
+                file.write("%s%s: typing.Optional[%s] = None\n" % (ind, field.name, schema.python_type_string(field)))
+
+        file.write("\n")
 
     def read_data(self, file, schema):
         if self.type == DefinitionType.Enum:
@@ -403,6 +435,7 @@ class Definition:
 class Module:
     pass
 
+
 class Schema:
     def __init__(self):
         self.definitions = []
@@ -410,7 +443,9 @@ class Schema:
 
     def read_binary_schema(self, file):
         self.definitions = read_array(file, self.read_binary_schema_definition)
+        self.compile()
 
+    def compile(self):
         for definition in self.definitions:
             definition.compile(self)
 
@@ -438,9 +473,36 @@ class Schema:
             return type.name.lower()
         return self.definitions[type].name
 
+    def python_type(self, type):
+        if isinstance(type, Field):
+            if type.is_byte_array:
+                return bytes
+            base = self.python_type(type.type)
+            if type.is_array:
+                return list[base]
+            return base
+
+        if isinstance(type, FieldType):
+            return type.to_python_type()
+
+        return self.definitions[type].name
+
+    def python_type_string(self, type):
+        if isinstance(type, Field) and type.is_array and type.type == FieldType.Uint:
+            return "list[uint]"
+        pt = self.python_type(type)
+        if pt in (int, float, str, bytes, bool, uint):
+            return pt.__name__
+        return repr(pt)
+
     def write_text_schema(self, file):
         for definition in self.definitions:
             definition.write_text_schema(file, self)
+
+    def write_python_schema(self, file):
+        file.write("import enum\nimport typing\nimport dataclasses\n\n\nclass uint(int):\n    pass\n\n")
+        for definition in self.definitions:
+            definition.write_python_schema(file, self)
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -469,3 +531,78 @@ def json_encode(v):
             if s is not None:
                 out[k] = s
         return out
+
+
+def module_to_schema_type(field, type, uint, fields_to_fix):
+    if type is bytes:
+        field.is_array = True
+        field.type = FieldType.Byte
+        return
+
+    if typing.get_origin(type) is list:
+        field.is_array = True
+        type = typing.get_args(type)[0]
+    elif typing.get_origin(type) is typing.Union:
+        type = typing.get_args(type)[0]
+
+    if isinstance(type, str):
+        field.type = type
+        fields_to_fix.append(field)
+    elif type is int:
+        field.type = FieldType.Int
+    elif type is bool:
+        field.type = FieldType.Bool
+    elif type is uint:
+        field.type = FieldType.Uint
+    elif type is float:
+        field.type = FieldType.Float
+    elif type is str:
+        field.type = FieldType.String
+
+
+def module_to_schema(module):
+    index = 0
+    schema = Schema()
+    fields_to_fix = []
+    uint_class = uint
+    definitions = {}
+
+    for name, value in vars(module).items():
+        if name.startswith("_") or not inspect.isclass(value):
+            continue
+
+        if issubclass(value, int):
+            uint_class = value
+            continue
+
+        definition = Definition()
+        definitions[name] = len(schema.definitions)
+        schema.definitions.append(definition)
+        definition.name = name
+        definition.python_type = value
+
+        if issubclass(value, enum.Enum):
+            definition.type = DefinitionType.Enum
+            for v in value:
+                f = Field()
+                f.name = v.name.strip("_")
+                f.type = FieldType.Uint
+                f.value = v.value
+                definition.fields.append(f)
+        elif hasattr(value, "__slots__"):
+            definition.type = DefinitionType.Struct
+            for field in value.__dataclass_fields__.values():
+                f = Field()
+                f.name = field.name.strip("_")
+                module_to_schema_type(f, field.type, uint_class, fields_to_fix)
+        else:
+            definition.type = DefinitionType.Message
+            for index, field in enumerate(value.__dataclass_fields__.values()):
+                f = Field()
+                f.name = field.name.strip("_")
+                module_to_schema_type(f, field.type, uint_class, fields_to_fix)
+                f.value = index + 1
+
+    schema.compile()
+    schema.module = module
+    return schema

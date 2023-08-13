@@ -31,6 +31,13 @@ parser.add_argument(
     help="Path to write the text schema to",
 )
 parser.add_argument(
+    "--binary-schema",
+    "-b",
+    default=None,
+    type=pathlib.Path,
+    help="Path to write the binary schema to",
+)
+parser.add_argument(
     "file",
     type=pathlib.Path,
     help="Path to the figma file",
@@ -49,3 +56,7 @@ with open_output(args.output, "w") as f:
 if args.schema:
     with open(args.schema, "w") as f:
         file.schema.write_text_schema(f)
+
+if args.binary_schema:
+    with open(args.binary_schema, "wb") as f:
+        file.schema.write_binary_schema(f)

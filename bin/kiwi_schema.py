@@ -31,6 +31,12 @@ parser.add_argument(
     action="store_true",
     help="Output binary schema",
 )
+parser.add_argument(
+    "--python",
+    "-p",
+    action="store_true",
+    help="Output python module",
+)
 
 args = parser.parse_args()
 
@@ -42,6 +48,9 @@ with open(args.schema, "rb") as f:
 if args.binary:
     with open_output(args.output, "wb") as f:
         schema.write_binary_schema(f)
+elif args.python:
+    with open_output(args.output, "w") as f:
+        schema.write_python_schema(f)
 else:
     with open_output(args.output, "w") as f:
         schema.write_text_schema(f)
