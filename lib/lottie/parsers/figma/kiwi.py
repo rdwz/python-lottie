@@ -424,7 +424,7 @@ class Definition:
                     write_uint(file, field.value)
                     field.write_value(file, schema, fv)
 
-                file.write(b'\0')
+            file.write(b'\0')
 
     def __str__(self):
         return "%s %s" % (self.type.name.lower(), self.name)

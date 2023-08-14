@@ -124,7 +124,7 @@ class FigmaFile:
     def _write_chunk(self, file, bio):
         data = deflate_raw(bio.getvalue())
         write_uint32le(file, len(data))
-        return data
+        file.write(data)
 
     def write_zip(self, file):
         with zipfile.ZipFile(file, "w") as zf:
