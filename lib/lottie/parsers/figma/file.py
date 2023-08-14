@@ -37,6 +37,8 @@ def deflate_raw(data):
 
 
 class FigmaFile:
+    default_gray_value = 0.9607843160629272
+
     def __init__(self):
         self.schema = Schema()
         self.data = None
@@ -45,9 +47,9 @@ class FigmaFile:
         self.meta = {
             "client_meta": {
                 "background_color": {
-                    "r":0.9607843160629272,
-                    "g":0.9607843160629272,
-                    "b":0.9607843160629272,
+                    "r": self.default_gray_value,
+                    "g": self.default_gray_value,
+                    "b": self.default_gray_value,
                     "a":1
                 },
                 "thumbnail_size": {
@@ -55,8 +57,8 @@ class FigmaFile:
                     "height": 512
                 },
                 "render_coordinates": {
-                    "x":0,
-                    "y":0,
+                    "x": 0,
+                    "y": 0,
                     "width": 512,
                     "height": 512
                 }
