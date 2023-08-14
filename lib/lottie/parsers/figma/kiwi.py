@@ -397,6 +397,7 @@ class Definition:
             if not isinstance(v, int):
                 v = v.value
             write_uint(file, v)
+
         elif self.type == DefinitionType.Struct:
             if isinstance(v, dict):
                 getter = get_item
@@ -492,6 +493,8 @@ class Schema:
             return "list[uint]"
         pt = self.python_type(type)
         if pt in (int, float, str, bytes, bool, uint):
+            if isinstance(type, Field) and type.name == pt.__name__:
+                return '__builtins__["%s"]' % pt.__name__
             return pt.__name__
         return repr(pt)
 
@@ -534,6 +537,9 @@ def json_encode(v):
 
 
 def module_to_schema_type(field, type, uint, fields_to_fix):
+    if typing.get_origin(type) is typing.Union:
+        type = typing.get_args(type)[0]
+
     if type is bytes:
         field.is_array = True
         field.type = FieldType.Byte
@@ -542,10 +548,11 @@ def module_to_schema_type(field, type, uint, fields_to_fix):
     if typing.get_origin(type) is list:
         field.is_array = True
         type = typing.get_args(type)[0]
-    elif typing.get_origin(type) is typing.Union:
-        type = typing.get_args(type)[0]
 
-    if isinstance(type, str):
+    if isinstance(type, typing.ForwardRef):
+        field.type = type.__forward_arg__
+        fields_to_fix.append(field)
+    elif isinstance(type, str):
         field.type = type
         fields_to_fix.append(field)
     elif type is int:
@@ -558,6 +565,9 @@ def module_to_schema_type(field, type, uint, fields_to_fix):
         field.type = FieldType.Float
     elif type is str:
         field.type = FieldType.String
+    else:
+        breakpoint()
+        raise ValueError("Not a valid type: %s" % type)
 
 
 def module_to_schema(module):
@@ -595,6 +605,7 @@ def module_to_schema(module):
                 f = Field()
                 f.name = field.name.strip("_")
                 module_to_schema_type(f, field.type, uint_class, fields_to_fix)
+                definition.fields.append(f)
         else:
             definition.type = DefinitionType.Message
             for index, field in enumerate(value.__dataclass_fields__.values()):
@@ -602,6 +613,10 @@ def module_to_schema(module):
                 f.name = field.name.strip("_")
                 module_to_schema_type(f, field.type, uint_class, fields_to_fix)
                 f.value = index + 1
+                definition.fields.append(f)
+
+    for field in fields_to_fix:
+        field.type = definitions[field.type]
 
     schema.compile()
     schema.module = module

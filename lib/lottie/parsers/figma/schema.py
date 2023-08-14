@@ -811,7 +811,7 @@ class GUIDMapping:
 
 @dataclasses.dataclass(slots=True)
 class Blob:
-    bytes: bytes
+    bytes: __builtins__["bytes"]
 
 
 @dataclasses.dataclass
@@ -1067,7 +1067,7 @@ class SharedSymbolReference:
     symbolID: typing.Optional['GUID'] = None
     versionHash: typing.Optional[str] = None
     guidPathMappings: typing.Optional[list['GUIDPathMapping']] = None
-    bytes: typing.Optional[bytes] = None
+    bytes: typing.Optional[__builtins__["bytes"]] = None
     libraryGUIDToSubscribingGUID: typing.Optional[list['GUIDMapping']] = None
     componentKey: typing.Optional[str] = None
     unflatteningMappings: typing.Optional[list['GUIDPathMapping']] = None
