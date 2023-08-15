@@ -5,8 +5,8 @@ import struct
 import zipfile
 import PIL.Image
 
-from .kiwi import Schema
-
+from .kiwi import Schema, module_to_schema
+from . import schema
 
 def read_uint32le(file):
     return struct.unpack("<i", file.read(4))[0]
@@ -38,6 +38,13 @@ def deflate_raw(data):
 
 class FigmaFile:
     default_gray_value = 0.9607843160629272
+    _default_schema = None
+
+    @classmethod
+    def default_schema(cls):
+        if cls._default_schema is None:
+            cls._default_schema = module_to_schema(schema)
+        return cls._default_schema
 
     def __init__(self):
         self.schema = Schema()
@@ -67,6 +74,13 @@ class FigmaFile:
             "developer_related_links": []
         }
         self.thumbnail = None
+        self._schema_root = None
+
+    @property
+    def schema_root(self):
+        if self._schema_root is None:
+            self._schema_root = self.schema["Message"]
+        return self._schema_root
 
     def load_data(self, file):
         header = file.read(8)
@@ -76,8 +90,7 @@ class FigmaFile:
         schema = self._read_chunk(file)
         self.schema.read_binary_schema(schema)
         data = self._read_chunk(file)
-        root = self.schema["Message"]
-        self.data = root.read_data(data, self.schema)
+        self.data = self.schema_root.read_data(data, self.schema)
 
     def _read_chunk(self, file):
         size = read_uint32le(file)
@@ -120,7 +133,7 @@ class FigmaFile:
         self._write_chunk(file, schema)
 
         data = io.BytesIO()
-        self.schema["Message"].write_data(data, self.schema, self.data)
+        self.schema_root.write_data(data, self.schema, self.data)
         self._write_chunk(file, data)
 
     def _write_chunk(self, file, bio):

@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.join(
 ))
 from lottie.parsers.figma.file import FigmaFile
 from lottie.parsers.figma.kiwi import json_encode
-from lottie.utils.script import open_output
 
 
 parser = argparse.ArgumentParser(
@@ -42,6 +41,13 @@ parser.add_argument(
     type=pathlib.Path,
     help="Path to the figma file",
 )
+parser.add_argument(
+    "--blob",
+    default=[],
+    nargs=2,
+    action="append",
+    help="Extract a blob",
+)
 
 args = parser.parse_args()
 
@@ -49,9 +55,9 @@ with open(args.file, "rb") as f:
     file = FigmaFile()
     file.load(f)
 
-
-with open_output(args.output, "w") as f:
-    json.dump(file.data, f, indent=4, default=json_encode)
+if args.output:
+    with open(args.output, "w") as f:
+        json.dump(file.data, f, indent=4, default=json_encode)
 
 if args.schema:
     with open(args.schema, "w") as f:
@@ -60,3 +66,7 @@ if args.schema:
 if args.binary_schema:
     with open(args.binary_schema, "wb") as f:
         file.schema.write_binary_schema(f)
+
+for index, filename in args.blob:
+    with open(filename, "wb") as f:
+        f.write(file.data.blobs[int(index)].bytes)
