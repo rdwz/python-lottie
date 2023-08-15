@@ -1,10 +1,13 @@
 import re
 import math
+import enum
+import struct
 import dataclasses
 import PIL.Image
 
 from . import schema
 from .file import FigmaFile
+from ...objects import bezier
 
 
 class Converter:
@@ -47,26 +50,18 @@ class Converter:
         return guid
 
     def add_node(self, node):
-        nc = schema.NodeChange(
-            guid=self.guid(node),
-            phase=schema.NodePhase.CREATED,
-            type=getattr(schema.NodeType, re.sub("([a-z])([A-Z])", r"\1_\2", type(node).__name__).upper()),
-        )
-
-        if node.parent:
-            nc.parentIndex = schema.ParentIndex(
-                guid=self.guid(node.parent),
-                position="!"
-            )
-
-        for pname, pval in vars(node).items():
-            if pname not in ("children", "parent"):
-                setattr(nc, pname, pval)
+        nc = node.to_node_change(self)
 
         self.message.nodeChanges.append(nc)
 
         for child in node.children:
             self.add_node(child)
+
+    def blob(self, data):
+        blob = schema.Blob(bytes=data)
+        id = len(self.message.blobs)
+        self.message.blobs.append(blob)
+        return id
 
 
 def identity_transform():
@@ -98,6 +93,31 @@ class FigmaNode:
         self.children.append(node)
         return node
 
+    def node_change_type(self):
+        return re.sub("([a-z])([A-Z])", r"\1_\2", type(self).__name__).upper()
+
+    def node_change_ignore(self):
+        return ("children", "parent")
+
+    def to_node_change(self, converter):
+        nc = schema.NodeChange(
+            guid=converter.guid(self),
+            phase=schema.NodePhase.CREATED,
+            type=getattr(schema.NodeType, self.node_change_type()),
+        )
+
+        if self.parent:
+            nc.parentIndex = schema.ParentIndex(
+                guid=converter.guid(self.parent),
+                position="!"
+            )
+
+        for pname, pval in vars(self).items():
+            if pname not in self.node_change_ignore():
+                setattr(nc, pname, pval)
+
+        return nc
+
 
 class Document(FigmaNode):
     def __init__(self):
@@ -127,7 +147,7 @@ class Canvas(FigmaNode):
 class Drawable(FigmaNode):
     def __init__(self):
         super().__init__()
-        self.locked = True
+        self.locked = False
         self.dashPattern = []
         self.strokeWeight = 1
         self.cornerRadius = 0
@@ -203,7 +223,43 @@ class Text(Shape):
 
 
 class Vector(Shape):
-    pass
+    def __init__(self):
+        super().__init__()
+        self.bezier = Bezier()
+
+    def node_change_ignore(self):
+        return super().node_change_ignore() + ("bezier", "size")
+
+    def to_node_change(self, converter):
+        nc = super().to_node_change(converter)
+
+        nc.vectorData = schema.VectorData(
+            vectorNetworkBlob=converter.blob(self.bezier.to_blob())
+        )
+
+        if self.bezier.points:
+            p = self.bezier.points[0].vertex
+
+            nc.transform = dataclasses.replace(nc.transform)
+            nc.transform.m02 += p.x
+            nc.transform.m12 += p.y
+
+            minp = schema.Vector(p.x, p.y)
+            maxp = schema.Vector(p.x, p.y)
+            for p in self.bezier.points:
+                if p.vertex.x < minp.x:
+                    minp.x = p.vertex.x
+                if p.vertex.y < minp.y:
+                    minp.y = p.vertex.y
+                if p.vertex.x > maxp.x:
+                    maxp.x = p.vertex.x
+                if p.vertex.y > maxp.y:
+                    maxp.y = p.vertex.y
+
+            nc.size = schema.Vector(maxp.x - minp.x, maxp.y - minp.y)
+            nc.vectorData.normalizedSize = nc.size
+
+        return nc
 
 
 class BooleanOperation(Shape):
@@ -222,3 +278,63 @@ def SolidPaint(color, opacity=1):
         visible=True,
         blendMode=schema.BlendMode.NORMAL
     )
+
+
+class BezierTangentMirror(enum.Enum):
+    NoMirror = 0
+    Angle = 1
+    AngleLength = 2
+
+
+class BezierPoint(bezier.BezierPoint):
+    def __init__(self, vertex, in_tangent=None, out_tangent=None):
+        super().__init__(vertex, in_tangent, out_tangent)
+        self.mirror = BezierTangentMirror.NoMirror
+
+
+class Bezier:
+    def __init__(self):
+        self.points = []
+        self.closed = False
+
+    def add_point(self, vertex, in_tangent=None, out_tangent=None):
+        p = BezierPoint(vertex, in_tangent, out_tangent)
+        self.points.append(p)
+        return p
+
+    def close(self):
+        self.closed = True
+
+    def to_blob(self):
+        data = b''
+
+        data += struct.pack("<i", len(self.points))
+        n_segs = len(self.points)
+        if not self.closed:
+            n_segs -= 1
+        data += struct.pack("<i", n_segs)
+        data += struct.pack("<i", 0)
+
+        if len(self.points) > 0:
+            delta = self.points[0].vertex
+
+            for p in self.points:
+                data += struct.pack("<i", p.mirror.value)
+                data += struct.pack("<f", p.vertex.x - delta.x)
+                data += struct.pack("<f", p.vertex.y - delta.y)
+
+            for segment_index in range(n_segs):
+                data += struct.pack("<i", 0)
+
+                data += struct.pack("<i", segment_index)
+                p = self.points[segment_index]
+                data += struct.pack("<f", p.out_tangent.x)
+                data += struct.pack("<f", p.out_tangent.y)
+
+                segment_index = (segment_index + 1) % len(self.points)
+                data += struct.pack("<i", segment_index)
+                p = self.points[segment_index]
+                data += struct.pack("<f", p.in_tangent.x)
+                data += struct.pack("<f", p.in_tangent.y)
+
+        return data
