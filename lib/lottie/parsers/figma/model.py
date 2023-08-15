@@ -75,6 +75,16 @@ def identity_transform():
     )
 
 
+def translated(matrix, x, y):
+    matrix = dataclasses.replace(matrix)
+    matrix.m02 += x
+    matrix.m12 += y
+
+
+def camel_to_caps(text):
+    return re.sub("([a-z])([A-Z])", r"\1_\2", text).upper()
+
+
 class FigmaNode:
     def __init__(self):
         self.parent = None
@@ -89,12 +99,14 @@ class FigmaNode:
         self.opacity = 1
 
     def add_child(self, node):
+        if node is None:
+            return None
         node.parent = self
         self.children.append(node)
         return node
 
     def node_change_type(self):
-        return re.sub("([a-z])([A-Z])", r"\1_\2", type(self).__name__).upper()
+        return camel_to_caps(type(self).__name__)
 
     def node_change_ignore(self):
         return ("children", "parent")
@@ -240,9 +252,7 @@ class Vector(Shape):
         if self.bezier.points:
             p = self.bezier.points[0].vertex
 
-            nc.transform = dataclasses.replace(nc.transform)
-            nc.transform.m02 += p.x
-            nc.transform.m12 += p.y
+            nc.transform = translated(nc.transform, p.x, p.y)
 
             minp = schema.Vector(p.x, p.y)
             maxp = schema.Vector(p.x, p.y)
@@ -256,7 +266,9 @@ class Vector(Shape):
                 if p.vertex.y > maxp.y:
                     maxp.y = p.vertex.y
 
-            nc.size = schema.Vector(maxp.x - minp.x, maxp.y - minp.y)
+            if nc.size.x == 0 and nc.size.y == 0:
+                nc.size = schema.Vector(maxp.x - minp.x, maxp.y - minp.y)
+
             nc.vectorData.normalizedSize = nc.size
 
         return nc
