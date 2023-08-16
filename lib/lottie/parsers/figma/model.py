@@ -266,7 +266,7 @@ class Vector(Shape):
                 if p.vertex.y > maxp.y:
                     maxp.y = p.vertex.y
 
-            if nc.size.x == 0 and nc.size.y == 0:
+            if nc.size and nc.size.x == 0 and nc.size.y == 0:
                 nc.size = schema.Vector(maxp.x - minp.x, maxp.y - minp.y)
 
             nc.vectorData.normalizedSize = nc.size
