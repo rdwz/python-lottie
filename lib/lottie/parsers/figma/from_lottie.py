@@ -32,8 +32,12 @@ def animation_to_figma(obj, time):
 def transform_to_figma(obj: objects.helpers.Transform, time, auto_orient):
     mat = obj.to_matrix(time, auto_orient)
     return schema.Matrix(
-        mat.a, mat.b, mat.tx,
-        mat.c, mat.d, mat.ty,
+        m00=mat.a,
+        m01=mat.c,
+        m02=mat.ty,
+        m10=mat.b,
+        m11=mat.d,
+        m12=mat.tx,
     )
 
 
