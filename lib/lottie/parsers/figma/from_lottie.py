@@ -1,4 +1,4 @@
-from . import model, schema
+from . import model, schema, enum_mapping
 from ... import objects
 
 
@@ -49,31 +49,10 @@ def empty_layer_to_figma(obj: objects.layers.Layer, time):
     return fig
 
 
-class EnumMapping:
-    def __init__(self, figma_default, mapping=None):
-        self.figma_enum = type(figma_default)
-        self.figma_default = figma_default
-        self.mapping = mapping
-
-    def to_figma(self, value):
-        if value is None:
-            return self.figma_default
-
-        if self.mapping is None:
-            caps = model.camel_to_caps(value.name)
-            if hasattr(self.figma_enum, caps):
-                return getattr(self.figma_enum, caps)
-            return self.figma_default
-        else:
-            return self.mapping.get(value, self.figma_default)
-
-
-blend_mode_mapping = EnumMapping(schema.BlendMode.PASS_THROUGH)
-
 
 def visual_layer_to_figma(obj: objects.layers.VisualLayer, time):
     fig = empty_layer_to_figma(obj, time)
-    fig.blendMode = blend_mode_mapping.to_figma(obj.blend_mode)
+    fig.blendMode = enum_mapping.blend_mode.to_figma(obj.blend_mode)
     return fig
 
 
@@ -86,7 +65,7 @@ def style_to_figma(obj, time):
         fig = model.SolidPaint(schema.Color(c.r, c.g, c.b, 1))
 
     fig.opacity = obj.opacity.get_value(time) / 100
-    fig.blendMode = blend_mode_mapping.to_figma(obj.blend_mode)
+    fig.blendMode = enum_mapping.blend_mode.to_figma(obj.blend_mode)
 
     return fig
 
@@ -199,7 +178,7 @@ def group_to_figma(obj: objects.shapes.Group, time):
     fig = model.Frame()
     fig.visible = not obj.hidden
     fig.name = obj.name or "Group"
-    fig.blendMode = blend_mode_mapping.to_figma(obj.blend_mode)
+    fig.blendMode = enum_mapping.blend_mode.to_figma(obj.blend_mode)
 
     for shape in shapes:
         fig.add_child(shape)
