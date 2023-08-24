@@ -156,14 +156,17 @@ def figma_to_lottie_shape(node: NodeItem):
         case NodeType.VECTOR:
             shape = vector_to_lottie(node)
         case NodeType.STAR:
+            # TODO
             shape = star_to_lottie(node)
         case NodeType.BOOLEAN_OPERATION:
             shape = boolean_to_lottie(node)
         case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
             shape = rect_to_lottie(node)
+            # TODO
         case NodeType.REGULAR_POLYGON:
             shape = polygon_to_lottie(node)
         case NodeType.LINE:
+            # TODO
             shape = line_to_lottie(node)
         case _:
             shape = None
@@ -242,3 +245,36 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
             shape.line_cap = enum_mapping.line_cap.to_lottie(node.figma.strokeCap)
             shape.line_join = enum_mapping.line_join.to_lottie(node.figma.strokeJoin)
             shape.width.value = node.figma.strokeWeight or 0
+
+
+def vector_to_lottie(value: schema.Vector):
+    return NVector(value.x, value.y)
+
+
+def ellipse_to_lottie(node: NodeItem):
+    shape = objects.shapes.Ellipse()
+    shape.size.value = vector_to_lottie(node.figma.size)
+    return shape
+
+
+def rect_to_lottie(node: NodeItem):
+    shape = objects.shapes.Rect()
+    shape.size.value = vector_to_lottie(node.figma.size)
+    return shape
+
+
+def vector_to_lottie(node: NodeItem):
+    shape = objects.shapes.Bezier()
+    # TODO
+    return shape
+
+
+def canvas_to_group(node: NodeItem):
+    group = objects.shapes.Group()
+
+    for child in node.children:
+        shape = figma_to_lottie_shape(child)
+        if shape:
+            group.add_shape(shape)
+
+    return group

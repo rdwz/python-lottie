@@ -1,7 +1,9 @@
 import io
+import re
 import zlib
 import json
 import struct
+import base64
 import zipfile
 import PIL.Image
 
@@ -155,3 +157,12 @@ class FigmaFile:
             with zf.open("canvas.fig", "w") as f:
                 self.write_data(f)
 
+    def load_clipboard_data(self, html):
+        match = re.search(r'\(figma\)(.*)\(/figma\)', html)
+        if not match:
+            return False
+
+        base_encoded = match.group(1)
+        data = base64.b64decode(base_encoded)
+        self.load_data(io.BytesIO(data))
+        return True

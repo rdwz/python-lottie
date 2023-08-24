@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import io
 import os
 import sys
 import json
@@ -11,6 +12,8 @@ sys.path.insert(0, os.path.join(
 ))
 from lottie.parsers.figma.file import FigmaFile
 from lottie.parsers.figma.kiwi import json_encode
+from lottie.parsers.figma.to_lottie import message_to_lottie
+from lottie.exporters.core import export_lottie
 
 
 parser = argparse.ArgumentParser(
@@ -40,6 +43,7 @@ parser.add_argument(
     "file",
     type=pathlib.Path,
     help="Path to the figma file",
+    nargs="?",
 )
 parser.add_argument(
     "--blob",
@@ -48,12 +52,36 @@ parser.add_argument(
     action="append",
     help="Extract a blob",
 )
+parser.add_argument(
+    "--clipboard",
+    "-c",
+    action="store_true",
+    help="Extract data from the clipboard"
+)
+parser.add_argument(
+    "--lottie",
+    "-l",
+    default=None,
+    type=pathlib.Path,
+    help="Path to write the converted lottie to",
+)
 
 args = parser.parse_args()
 
-with open(args.file, "rb") as f:
+
+if args.clipboard:
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication([])
+    clipboard = app.clipboard()
+    html = clipboard.mimeData().html()
+
     file = FigmaFile()
-    file.load(f)
+    file.load_clipboard_data(html)
+else:
+    with open(args.file, "rb") as f:
+        file = FigmaFile()
+        file.load(f)
 
 if args.output:
     with open(args.output, "w") as f:
@@ -70,3 +98,7 @@ if args.binary_schema:
 for index, filename in args.blob:
     with open(filename, "wb") as f:
         f.write(file.data.blobs[int(index)].bytes)
+
+if args.lottie:
+    anim = message_to_lottie(file.data, file.schema)
+    export_lottie(anim, args.lottie, pretty=True)

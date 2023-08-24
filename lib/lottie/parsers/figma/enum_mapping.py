@@ -8,9 +8,9 @@ class EnumMapping:
         self.figma_default = figma_default
         self.lottie_default = lottie_default
         self.lottie_enum = type(lottie_default)
-        self.l2f_mapping = dict(mapping)
-        self.f2l_mapping = None
+        self.f2l_mapping = self.l2f_mapping = None
         if mapping:
+            self.l2f_mapping = dict(mapping)
             self.f2l_mapping = {v: k for k, v in mapping}
 
     def to_figma(self, value):
