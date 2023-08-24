@@ -77,7 +77,9 @@ if args.clipboard:
     html = clipboard.mimeData().html()
 
     file = FigmaFile()
-    file.load_clipboard_data(html)
+    if not file.load_clipboard_data(html):
+        sys.stderr.write("No clipboard data\n")
+        sys.exit(1)
 else:
     with open(args.file, "rb") as f:
         file = FigmaFile()
@@ -100,5 +102,7 @@ for index, filename in args.blob:
         f.write(file.data.blobs[int(index)].bytes)
 
 if args.lottie:
-    anim = message_to_lottie(file.data, file.schema)
-    export_lottie(anim, args.lottie, pretty=True)
+    anim = message_to_lottie(file.data, file.schema.module)
+
+    with open(args.lottie, "w") as f:
+        export_lottie(anim, f, pretty=True)

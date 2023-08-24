@@ -14,4 +14,4 @@ def import_figma(animation, file, frame=0):
     else:
         ff.load(file)
 
-    return message_to_lottie(ff.data, ff.schema)
+    return message_to_lottie(ff.data, ff.schema.module)

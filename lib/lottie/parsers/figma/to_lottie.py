@@ -20,9 +20,9 @@ def transform_to_lottie(obj: schema.Matrix, transform = None):
         matrix.tx = obj.m12
         matrix.ty = obj.m02
         structure = matrix.extract_transform()
-        transform.position.set(structure["translation"])
-        transform.rotation.set(structure["angle"] * 180 / math.pi)
-        transform.scale.set(structure["scale"] * 100)
+        transform.position.value = structure["translation"]
+        transform.rotation.value = structure["angle"] * 180 / math.pi
+        transform.scale.value = structure["scale"] * 100
 
     return transform
 
@@ -60,7 +60,7 @@ class NodeMap:
         return (id.sessionID, id.localID)
 
     def add_node(self, node: schema.NodeChange):
-        item = self.node(node.id)
+        item = self.node(node.guid)
         item.figma = node
         return item
 
@@ -76,7 +76,7 @@ class NodeMap:
         if message.nodeChanges is not None:
             for node in message.nodeChanges:
                 item = self.process_change(node)
-                if node.type == schema.NodeType.DOCUMENT:
+                if node.type == self.schema.NodeType.DOCUMENT:
                     self.document = item
 
         if message.blobs:
@@ -108,12 +108,14 @@ def document_to_lottie(node: NodeItem):
             anim.assets.append(comp)
             canvas_to_comp(canvas, comp)
 
+    return anim
+
 
 def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     comp.name = canvas.figma.name
     canvas.lottie = comp
 
-    for child in canvas:
+    for child in reversed(canvas.children):
         figma_to_lottie_layer(child, comp, None)
 
 
@@ -154,7 +156,7 @@ def figma_to_lottie_shape(node: NodeItem):
         case NodeType.CANVAS:
             shape = canvas_to_group(node)
         case NodeType.VECTOR:
-            shape = vector_to_lottie(node)
+            shape = vector_shape_to_lottie(node)
         case NodeType.STAR:
             # TODO
             shape = star_to_lottie(node)
@@ -254,16 +256,18 @@ def vector_to_lottie(value: schema.Vector):
 def ellipse_to_lottie(node: NodeItem):
     shape = objects.shapes.Ellipse()
     shape.size.value = vector_to_lottie(node.figma.size)
+    shape.position.value = shape.size.value / 2
     return shape
 
 
 def rect_to_lottie(node: NodeItem):
     shape = objects.shapes.Rect()
     shape.size.value = vector_to_lottie(node.figma.size)
+    shape.position.value = shape.size.value / 2
     return shape
 
 
-def vector_to_lottie(node: NodeItem):
+def vector_shape_to_lottie(node: NodeItem):
     shape = objects.shapes.Bezier()
     # TODO
     return shape
@@ -272,7 +276,7 @@ def vector_to_lottie(node: NodeItem):
 def canvas_to_group(node: NodeItem):
     group = objects.shapes.Group()
 
-    for child in node.children:
+    for child in reversed(node.children):
         shape = figma_to_lottie_shape(child)
         if shape:
             group.add_shape(shape)
