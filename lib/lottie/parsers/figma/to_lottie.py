@@ -11,6 +11,8 @@ def transform_to_lottie(obj: schema.Matrix, transform = None):
     if transform is None:
         transform = objects.helpers.Transform()
 
+    matrix = None
+
     if obj is not None:
         matrix = TransformMatrix()
         matrix.a = obj.m00
@@ -24,7 +26,7 @@ def transform_to_lottie(obj: schema.Matrix, transform = None):
         transform.rotation.value = structure["angle"] * 180 / math.pi
         transform.scale.value = structure["scale"] * 100
 
-    return transform
+    return transform, matrix
 
 
 class NodeItem:
@@ -115,11 +117,26 @@ def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     comp.name = canvas.figma.name
     canvas.lottie = comp
 
+    adj = objects.layers.NullLayer()
+    adj.name = "Page adjustment"
+    adj.index = 0
+    comp.add_layer(adj)
+    bounding_points = []
+
     for child in reversed(canvas.children):
-        figma_to_lottie_layer(child, comp, None)
+        figma_to_lottie_layer(child, comp, adj.index, bounding_points)
+
+    if bounding_points:
+        bb = objects.shapes.BoundingBox()
+        for p in bounding_points:
+            bb.include(p.x, p.y)
+
+        comp.width = math.ceil(bb.width)
+        comp.height = math.ceil(bb.height)
+        adj.transform.position.value = NVector(-bb.x1, -bb.y1)
 
 
-def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition, parent_index):
+def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition, parent_index, bounding_points):
     NodeType = node.map.schema.NodeType
 
     match node.type:
@@ -130,7 +147,7 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
             layer = objects.layers.ImageLayer()
             # TODO
         case _:
-            shape = figma_to_lottie_shape(node)
+            shape = figma_to_lottie_shape(node, bounding_points)
             if shape is None:
                 return None
             layer = objects.layers.ShapeLayer()
@@ -142,19 +159,20 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
     comp.add_layer(layer)
     layer.parent_index = parent_index
     for child in node.children:
-        figma_to_lottie_layer(child, comp, layer.index)
+        figma_to_lottie_layer(child, comp, layer.index, bounding_points)
 
     return layer
 
 
-def figma_to_lottie_shape(node: NodeItem):
+def figma_to_lottie_shape(node: NodeItem, bounding_points):
     NodeType = node.map.schema.NodeType
+    points = []
 
     match node.type:
         case NodeType.ELLIPSE:
             shape = ellipse_to_lottie(node)
         case NodeType.CANVAS:
-            shape = canvas_to_group(node)
+            shape = canvas_to_group(node, points)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
         case NodeType.STAR:
@@ -184,10 +202,20 @@ def figma_to_lottie_shape(node: NodeItem):
         shape_style_to_lottie(node, group)
         shape = group
         shape.name = node.figma.name
+        points = [
+            NVector(0, 0),
+            NVector(node.figma.size.x, 0),
+            NVector(node.figma.size.x, node.figma.size.y),
+            NVector(0, node.figma.size.y)
+        ]
 
     if node.figma.blendMode is not None:
         shape.blend_mode = enum_mapping.blend_mode.to_lottie(node.figma.blendMode)
-    transform_to_lottie(node.figma.transform, shape.transform)
+
+    matrix = transform_to_lottie(node.figma.transform, shape.transform)[1]
+    for point in points:
+        bounding_points.append(matrix.apply(point))
+
     node.lottie = shape
     return shape
 
@@ -273,11 +301,11 @@ def vector_shape_to_lottie(node: NodeItem):
     return shape
 
 
-def canvas_to_group(node: NodeItem):
+def canvas_to_group(node: NodeItem, bounding_points):
     group = objects.shapes.Group()
 
     for child in reversed(node.children):
-        shape = figma_to_lottie_shape(child)
+        shape = figma_to_lottie_shape(child, bounding_points)
         if shape:
             group.add_shape(shape)
 
