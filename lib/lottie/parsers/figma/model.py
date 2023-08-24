@@ -1,4 +1,3 @@
-import re
 import math
 import enum
 import struct
@@ -79,10 +78,6 @@ def translated(matrix, x, y):
     matrix = dataclasses.replace(matrix)
     matrix.m02 += x
     matrix.m12 += y
-
-
-def camel_to_caps(text):
-    return re.sub("([a-z])([A-Z])", r"\1_\2", text).upper()
 
 
 class FigmaNode:
