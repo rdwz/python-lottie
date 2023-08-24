@@ -40,6 +40,13 @@ parser.add_argument(
     help="Path to write the binary schema to",
 )
 parser.add_argument(
+    "--figma",
+    "-f",
+    default=None,
+    type=pathlib.Path,
+    help="Path to write the internal figma file to",
+)
+parser.add_argument(
     "file",
     type=pathlib.Path,
     help="Path to the figma file",
@@ -106,3 +113,7 @@ if args.lottie:
 
     with open(args.lottie, "w") as f:
         export_lottie(anim, f, pretty=True)
+
+if args.figma:
+    with open(args.figma, "wb") as f:
+        file.write_data(f)
