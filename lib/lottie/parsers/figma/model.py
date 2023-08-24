@@ -7,6 +7,7 @@ import PIL.Image
 from . import schema
 from .file import FigmaFile
 from ...objects import bezier
+from ...utils.string import camel_to_caps
 
 
 class Converter:
@@ -198,7 +199,7 @@ class Ellipse(Shape):
 
 
 class Line(Shape):
-   pass
+    pass
 
 
 class RoundedRectangle(Shape):

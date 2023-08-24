@@ -7,7 +7,7 @@ from ...utils.transform import TransformMatrix
 from ...utils.color import Color
 
 
-def transform_to_lottie(obj: schema.Matrix, transform = None):
+def transform_to_lottie(obj: schema.Matrix, transform=None):
     if transform is None:
         transform = objects.helpers.Transform()
 
@@ -175,19 +175,17 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
             shape = canvas_to_group(node, points)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
-        case NodeType.STAR:
-            # TODO
-            shape = star_to_lottie(node)
-        case NodeType.BOOLEAN_OPERATION:
-            shape = boolean_to_lottie(node)
         case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
             shape = rect_to_lottie(node)
-            # TODO
-        case NodeType.REGULAR_POLYGON:
-            shape = polygon_to_lottie(node)
-        case NodeType.LINE:
-            # TODO
-            shape = line_to_lottie(node)
+        # TODO
+        # case NodeType.STAR:
+            # shape = star_to_lottie(node)
+        # case NodeType.BOOLEAN_OPERATION:
+            # shape = boolean_to_lottie(node)
+        # case NodeType.REGULAR_POLYGON:
+            # shape = polygon_to_lottie(node)
+        # case NodeType.LINE:
+            # shape = line_to_lottie(node)
         case _:
             shape = None
 
@@ -248,7 +246,6 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
 
             shape.blend_mode = enum_mapping.blend_mode.to_lottie(paint.blendMode)
             group.add_shape(shape)
-
 
     if node.figma.strokePaints:
         for paint in node.figma.fillPaints:

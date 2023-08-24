@@ -2,6 +2,7 @@ from . import schema
 from ... import objects
 from ...utils.string import camel_to_caps, snake_to_camel
 
+
 class EnumMapping:
     def __init__(self, figma_default, lottie_default, mapping=None):
         self.figma_enum = type(figma_default)
@@ -36,7 +37,6 @@ class EnumMapping:
             return self.lottie_default
         else:
             return self.f2l_mapping.get(value, self.lottie_default)
-
 
 
 blend_mode = EnumMapping(schema.BlendMode.PASS_THROUGH, objects.shapes.BlendMode.Normal)

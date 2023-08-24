@@ -49,7 +49,6 @@ def empty_layer_to_figma(obj: objects.layers.Layer, time):
     return fig
 
 
-
 def visual_layer_to_figma(obj: objects.layers.VisualLayer, time):
     fig = empty_layer_to_figma(obj, time)
     fig.blendMode = enum_mapping.blend_mode.to_figma(obj.blend_mode)
@@ -171,6 +170,7 @@ def star_to_figma(obj: objects.shapes.Star, time):
     fig.transform = model.translated(fig.transform, p.x, p.y)
 
     return fig
+
 
 def group_to_figma(obj: objects.shapes.Group, time):
     shapes = shapes_to_figma(obj.shapes, time)

@@ -10,6 +10,7 @@ import PIL.Image
 from .kiwi import Schema, module_to_schema
 from . import schema
 
+
 def read_uint32le(file):
     return struct.unpack("<i", file.read(4))[0]
 
@@ -59,7 +60,7 @@ class FigmaFile:
                     "r": self.default_gray_value,
                     "g": self.default_gray_value,
                     "b": self.default_gray_value,
-                    "a":1
+                    "a": 1
                 },
                 "thumbnail_size": {
                     "width": 512,

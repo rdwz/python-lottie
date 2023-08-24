@@ -2959,4 +2959,3 @@ class HandoffStatusMapEntry:
 @dataclasses.dataclass
 class HandoffStatusMap:
     entries: typing.Optional[list['HandoffStatusMapEntry']] = None
-

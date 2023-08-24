@@ -212,7 +212,6 @@ class Field:
         if v in self.keywords:
             self._name += "_"
 
-
     @property
     def is_byte_array(self):
         return self.is_array and self.type == FieldType.Byte
