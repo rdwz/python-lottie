@@ -138,6 +138,7 @@ def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
 
 def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition, parent_index, bounding_points):
     NodeType = node.map.schema.NodeType
+    points = []
 
     match node.type:
         case NodeType.TEXT:
@@ -149,7 +150,7 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
         case NodeType.CANVAS | NodeType.FRAME:
             layer = objects.layers.NullLayer()
         case _:
-            shape = figma_to_lottie_shape(node, bounding_points)
+            shape = figma_to_lottie_shape(node, points)
             if shape is None:
                 return None
             layer = objects.layers.ShapeLayer()
@@ -160,14 +161,19 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
     layer.index = len(comp.layers)
     comp.add_layer(layer)
     layer.parent_index = parent_index
-    points = []
     for child in reversed(node.children):
         figma_to_lottie_layer(child, comp, layer.index, points)
 
 
     matrix = transform_to_lottie(node.figma.transform, layer.transform)[1]
+    # bb = objects.shapes.BoundingBox()
     for point in points:
+        # bb.include(point.x, point.y)
         bounding_points.append(matrix.apply(point))
+
+    # if not math.isclose(bb.width, node.figma.size.x) or not math.isclose(bb.height, node.figma.size.y):
+        # layer.transform.scale.value.x = 100 * bb.width / node.figma.size.x
+        # layer.transform.scale.value.y = 100 * bb.height / node.figma.size.y
 
     return layer
 
