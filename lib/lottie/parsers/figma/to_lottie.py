@@ -187,12 +187,14 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
             shape = ellipse_to_lottie(node)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
-        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION | NodeType.LINE:
+        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
             shape = rect_to_lottie(node)
         case NodeType.REGULAR_POLYGON:
             shape = polystar_to_lottie(node, False)
         case NodeType.STAR:
             shape = polystar_to_lottie(node, True)
+        case NodeType.LINE:
+            shape = line_to_lottie(node)
         # TODO
         # case NodeType.BOOLEAN_OPERATION:
             # shape = boolean_to_lottie(node)
@@ -250,6 +252,14 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
             group.add_shape(shape)
 
     if node.figma.strokePaints:
+        dashes = None
+        if node.figma.dashPattern:
+            dashes = []
+            DashType = objects.shapes.StrokeDashType
+            dashes.append(objects.shapes.StrokeDash(0, DashType.Offset))
+            for i, l in enumerate(node.figma.dashPattern):
+                dashes.append(objects.shapes.StrokeDash(l, DashType.Gap if i % 2 else DashType.Dash))
+
         for paint in node.figma.strokePaints:
             match paint.type:
                 case node.map.schema.PaintType.GRADIENT_LINEAR:
@@ -274,6 +284,7 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
             shape.line_cap = enum_mapping.line_cap.to_lottie(node.figma.strokeCap)
             shape.line_join = enum_mapping.line_join.to_lottie(node.figma.strokeJoin)
             shape.width.value = node.figma.strokeWeight or 0
+            shape.dashes = dashes
 
 
 def vector_to_lottie(value: schema.Vector):
@@ -346,7 +357,7 @@ def vector_shape_to_lottie(node: NodeItem):
 def polystar_to_lottie(node: NodeItem, star: bool):
     shape = objects.shapes.Star()
     shape.points.value = node.figma.count
-    size = NVector(node.figma.size.x, node.figma.size.y)
+    size = vector_to_lottie(node.figma.size)
 
     if size.x == size.y:
         shape.outer_radius.value = size.x / 2
@@ -369,3 +380,10 @@ def polystar_to_lottie(node: NodeItem, star: bool):
         shape.inner_radius = shape.inner_roundness = None
 
     return ret_shape
+
+
+def line_to_lottie(node: NodeItem):
+    shape = objects.shapes.Path()
+    shape.shape.value.add_point(NVector(0, 0))
+    shape.shape.value.add_point(vector_to_lottie(node.figma.size))
+    return shape
