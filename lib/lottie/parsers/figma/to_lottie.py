@@ -1,4 +1,6 @@
 import math
+import bisect
+import urllib.request
 
 from . import model, schema, enum_mapping
 from ... import objects
@@ -42,6 +44,11 @@ class NodeItem:
     def type(self):
         return self.figma.type
 
+    def add_to_parent(self, parent):
+        self.parent = parent
+        if parent:
+            bisect.insort(parent.children, self, key=lambda it: it.figma.parentIndex.position)
+
 
 class NodeMap:
     def __init__(self, schema):
@@ -70,9 +77,7 @@ class NodeMap:
     def process_change(self, node: schema.NodeChange):
         item = self.add_node(node)
         if item.figma.parentIndex:
-            item.parent = self.node(item.figma.parentIndex.guid)
-            if item.parent:
-                item.parent.children.append(item)
+            item.add_to_parent(self.node(item.figma.parentIndex.guid))
         return item
 
     def process_message(self, message: schema.Message):
@@ -124,7 +129,7 @@ def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     comp.add_layer(adj)
     bounding_points = []
 
-    for child in canvas.children:
+    for child in reversed(canvas.children):
         figma_to_lottie_layer(child, comp, adj.index, bounding_points)
 
     if bounding_points:
@@ -178,13 +183,13 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
             shape = vector_shape_to_lottie(node)
         case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
             shape = rect_to_lottie(node)
+        case NodeType.REGULAR_POLYGON:
+            shape = polystar_to_lottie(node, False)
+        case NodeType.STAR:
+            shape = polystar_to_lottie(node, True)
         # TODO
-        # case NodeType.STAR:
-            # shape = star_to_lottie(node)
         # case NodeType.BOOLEAN_OPERATION:
             # shape = boolean_to_lottie(node)
-        # case NodeType.REGULAR_POLYGON:
-            # shape = polygon_to_lottie(node)
         # case NodeType.LINE:
             # shape = line_to_lottie(node)
         case _:
@@ -195,28 +200,25 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
 
     shape.name = node.figma.name
 
-    if not isinstance(shape, objects.shapes.Group):
-        group = objects.shapes.Group()
-        group.add_shape(shape)
-        shape_style_to_lottie(node, group)
-        shape = group
-        shape.name = node.figma.name
-        points = [
-            NVector(0, 0),
-            NVector(node.figma.size.x, 0),
-            NVector(node.figma.size.x, node.figma.size.y),
-            NVector(0, node.figma.size.y)
-        ]
+    group = objects.shapes.Group()
+    group.add_shape(shape)
+    shape_style_to_lottie(node, group)
+    group.name = node.figma.name
+    points = [
+        NVector(0, 0),
+        NVector(node.figma.size.x, 0),
+        NVector(node.figma.size.x, node.figma.size.y),
+        NVector(0, node.figma.size.y)
+    ]
 
     if node.figma.blendMode is not None:
-        shape.blend_mode = enum_mapping.blend_mode.to_lottie(node.figma.blendMode)
+        group.blend_mode = enum_mapping.blend_mode.to_lottie(node.figma.blendMode)
 
-    matrix = transform_to_lottie(node.figma.transform, shape.transform)[1]
+    matrix = transform_to_lottie(node.figma.transform, group.transform)[1]
     for point in points:
         bounding_points.append(matrix.apply(point))
 
-    node.lottie = shape
-    return shape
+    return group
 
 
 def color_to_lottie(color: schema.Color):
@@ -249,7 +251,7 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
             group.add_shape(shape)
 
     if node.figma.strokePaints:
-        for paint in node.figma.fillPaints:
+        for paint in node.figma.strokePaints:
             match paint.type:
                 case node.map.schema.PaintType.GRADIENT_LINEAR:
                     shape = objects.shapes.GradientStroke()
@@ -331,6 +333,7 @@ def blob_to_bezier(blob: bytes):
 
     return bez
 
+
 def vector_shape_to_lottie(node: NodeItem):
     shape = objects.shapes.Path()
 
@@ -339,3 +342,31 @@ def vector_shape_to_lottie(node: NodeItem):
         shape.shape.value = blob_to_bezier(blob)
 
     return shape
+
+
+def polystar_to_lottie(node: NodeItem, star: bool):
+    shape = objects.shapes.Star()
+    shape.points.value = node.figma.count
+    size = NVector(node.figma.size.x, node.figma.size.y)
+
+    if size.x == size.y:
+        shape.outer_radius.value = size.x / 2
+        shape.position.value = size / 2
+        ret_shape = shape
+    else:
+        shape.outer_radius.value = 50
+        shape.name = node.figma.name
+        group = objects.shapes.Group()
+        group.add_shape(shape)
+        group.transform.scale.value = size
+        group.transform.position.value = size / 2
+        ret_shape = group
+
+    if star:
+        shape.star_type = objects.shapes.StarType.Star
+        shape.inner_radius.value = shape.outer_radius.value * node.figma.starInnerScale
+    else:
+        shape.star_type = objects.shapes.StarType.Polygon
+        shape.inner_radius = shape.inner_roundness = None
+
+    return ret_shape
