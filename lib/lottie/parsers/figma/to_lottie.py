@@ -70,7 +70,7 @@ class NodeMap:
     def process_change(self, node: schema.NodeChange):
         item = self.add_node(node)
         if item.figma.parentIndex:
-            item.parent = self.node(item.figma.parentIndex.guid, False)
+            item.parent = self.node(item.figma.parentIndex.guid)
             if item.parent:
                 item.parent.children.append(item)
         return item
@@ -119,12 +119,12 @@ def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     canvas.lottie = comp
 
     adj = objects.layers.NullLayer()
-    adj.name = "Page adjustment"
+    adj.name = comp.name
     adj.index = 0
     comp.add_layer(adj)
     bounding_points = []
 
-    for child in reversed(canvas.children):
+    for child in canvas.children:
         figma_to_lottie_layer(child, comp, adj.index, bounding_points)
 
     if bounding_points:
@@ -147,6 +147,8 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
         case NodeType.MEDIA:
             layer = objects.layers.ImageLayer()
             # TODO
+        case NodeType.CANVAS | NodeType.FRAME:
+            layer = objects.layers.NullLayer()
         case _:
             shape = figma_to_lottie_shape(node, bounding_points)
             if shape is None:
@@ -159,7 +161,7 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
     layer.index = len(comp.layers)
     comp.add_layer(layer)
     layer.parent_index = parent_index
-    for child in node.children:
+    for child in reversed(node.children):
         figma_to_lottie_layer(child, comp, layer.index, bounding_points)
 
     return layer
@@ -172,8 +174,6 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
     match node.type:
         case NodeType.ELLIPSE:
             shape = ellipse_to_lottie(node)
-        case NodeType.CANVAS:
-            shape = canvas_to_group(node, points)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
         case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
@@ -339,14 +339,3 @@ def vector_shape_to_lottie(node: NodeItem):
         shape.shape.value = blob_to_bezier(blob)
 
     return shape
-
-
-def canvas_to_group(node: NodeItem, bounding_points):
-    group = objects.shapes.Group()
-
-    for child in reversed(node.children):
-        shape = figma_to_lottie_shape(child, bounding_points)
-        if shape:
-            group.add_shape(shape)
-
-    return group
