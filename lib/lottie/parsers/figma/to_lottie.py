@@ -14,20 +14,14 @@ def transform_to_lottie(obj: schema.Matrix, transform=None):
     if transform is None:
         transform = objects.helpers.Transform()
 
-    matrix = None
+    matrix = TransformMatrix()
 
     if obj is not None:
-        matrix = TransformMatrix()
-        matrix.a = obj.m00
-        matrix.b = obj.m10
-        matrix.c = obj.m01
-        matrix.d = obj.m11
-        matrix.tx = obj.m02
-        matrix.ty = obj.m12
-        structure = matrix.extract_transform()
-        transform.position.value = structure["translation"]
-        transform.rotation.value = structure["angle"] * 180 / math.pi
-        transform.scale.value = structure["scale"] * 100
+        transform.position.value = NVector(obj.m02, obj.m12)
+        angle = math.asin(obj.m01)
+        transform.rotation.value = -angle * 180 / math.pi
+        matrix.rotate(angle)
+        matrix.translate(transform.position.value)
 
     return transform, matrix
 
@@ -166,8 +160,14 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
     layer.index = len(comp.layers)
     comp.add_layer(layer)
     layer.parent_index = parent_index
+    points = []
     for child in reversed(node.children):
-        figma_to_lottie_layer(child, comp, layer.index, bounding_points)
+        figma_to_lottie_layer(child, comp, layer.index, points)
+
+
+    matrix = transform_to_lottie(node.figma.transform, layer.transform)[1]
+    for point in points:
+        bounding_points.append(matrix.apply(point))
 
     return layer
 
@@ -181,7 +181,7 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
             shape = ellipse_to_lottie(node)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
-        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
+        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION | NodeType.LINE:
             shape = rect_to_lottie(node)
         case NodeType.REGULAR_POLYGON:
             shape = polystar_to_lottie(node, False)
@@ -190,8 +190,6 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
         # TODO
         # case NodeType.BOOLEAN_OPERATION:
             # shape = boolean_to_lottie(node)
-        # case NodeType.LINE:
-            # shape = line_to_lottie(node)
         case _:
             shape = None
 
@@ -204,19 +202,14 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
     group.add_shape(shape)
     shape_style_to_lottie(node, group)
     group.name = node.figma.name
-    points = [
-        NVector(0, 0),
-        NVector(node.figma.size.x, 0),
-        NVector(node.figma.size.x, node.figma.size.y),
-        NVector(0, node.figma.size.y)
-    ]
+
+    bounding_points.append(NVector(0, 0))
+    bounding_points.append(NVector(node.figma.size.x, 0))
+    bounding_points.append(NVector(node.figma.size.x, node.figma.size.y))
+    bounding_points.append(NVector(0, node.figma.size.y))
 
     if node.figma.blendMode is not None:
         group.blend_mode = enum_mapping.blend_mode.to_lottie(node.figma.blendMode)
-
-    matrix = transform_to_lottie(node.figma.transform, group.transform)[1]
-    for point in points:
-        bounding_points.append(matrix.apply(point))
 
     return group
 
