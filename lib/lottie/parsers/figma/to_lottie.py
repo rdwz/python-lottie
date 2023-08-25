@@ -50,6 +50,9 @@ class NodeMap:
         self.blobs = []
         self.document = None
         self.schema = schema
+        self.animation = None
+        self.pending_precomps = []
+        self.pending_precomp_layers = []
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -85,6 +88,25 @@ class NodeMap:
             for blob in message.blobs:
                 self.blobs.append(blob.bytes)
 
+    def precomp_node(self, node: NodeItem):
+        if not node.lottie:
+            node.lottie = objects.assets.Precomp()
+            node.lottie.id = "comp%s" % len(self.animation.assets)
+            self.animation.assets.append(node.lottie)
+        return node.lottie
+
+    def process_pending(self):
+        for node in self.pending_precomps:
+            comp = self.precomp_node(node)
+            node_to_comp(node, comp)
+        self.pending_precomps = []
+
+        for layer, guid in self.pending_precomp_layers:
+            node = self.node(guid)
+            comp = self.precomp_node(node)
+            precomp_layer(layer, comp)
+        self.pending_precomp_layers = []
+
 
 def message_to_lottie(message, kiwi_schema=schema):
     nodes = NodeMap(kiwi_schema)
@@ -96,24 +118,26 @@ def message_to_lottie(message, kiwi_schema=schema):
 
 def document_to_lottie(node: NodeItem):
     anim = objects.animation.Animation()
+    node.map.animation = anim
     parsed_main = False
 
     for canvas in node.children:
-        if canvas.type != node.map.schema.NodeType.CANVAS or canvas.figma.name == "Internal Only Canvas":
-            continue
+        if canvas.type == node.map.schema.NodeType.CANVAS:
+            if canvas.figma.name == "Internal Only Canvas":
+                continue
 
-        if not parsed_main:
-            canvas_to_comp(canvas, anim)
-            parsed_main = True
-        else:
-            comp = objects.composition.Composition()
-            anim.assets.append(comp)
-            canvas_to_comp(canvas, comp)
+            if not parsed_main:
+                node_to_comp(canvas, anim)
+                parsed_main = True
+            else:
+                comp = node.map.precomp_node(canvas)
+                node_to_comp(canvas, comp)
 
+    node.map.process_pending()
     return anim
 
 
-def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
+def node_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     comp.name = canvas.figma.name
     canvas.lottie = comp
 
@@ -138,7 +162,7 @@ def canvas_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
 
 def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition, parent_index, bounding_points):
     NodeType = node.map.schema.NodeType
-    points = []
+    children = node.children
 
     match node.type:
         case NodeType.TEXT:
@@ -149,38 +173,45 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
             # TODO
         case NodeType.CANVAS | NodeType.FRAME:
             layer = objects.layers.NullLayer()
+        case NodeType.SYMBOL:
+            layer = objects.layers.PreCompLayer()
+            node.map.pending_precomp_layers.append((layer, node.figma.guid))
+            node.map.pending_precomps.append(node)
+            children = []
+        case NodeType.INSTANCE:
+            layer = objects.layers.PreCompLayer()
+            node.map.pending_precomp_layers.append((layer, node.figma.symbolData.symbolID))
         case _:
-            shape = figma_to_lottie_shape(node, points)
+            shape = figma_to_lottie_shape(node)
             if shape is None:
                 return None
             layer = objects.layers.ShapeLayer()
             layer.shapes.append(shape)
 
     layer.name = node.figma.name
-    node.lottie = layer
     layer.index = len(comp.layers)
     comp.add_layer(layer)
     layer.parent_index = parent_index
-    for child in reversed(node.children):
+
+    points = [
+        NVector(0, 0),
+        NVector(node.figma.size.x, 0),
+        NVector(node.figma.size.x, node.figma.size.y),
+        NVector(0, node.figma.size.y),
+    ]
+
+    for child in reversed(children):
         figma_to_lottie_layer(child, comp, layer.index, points)
 
-
     matrix = transform_to_lottie(node.figma.transform, layer.transform)[1]
-    # bb = objects.shapes.BoundingBox()
     for point in points:
-        # bb.include(point.x, point.y)
         bounding_points.append(matrix.apply(point))
-
-    # if not math.isclose(bb.width, node.figma.size.x) or not math.isclose(bb.height, node.figma.size.y):
-        # layer.transform.scale.value.x = 100 * bb.width / node.figma.size.x
-        # layer.transform.scale.value.y = 100 * bb.height / node.figma.size.y
 
     return layer
 
 
-def figma_to_lottie_shape(node: NodeItem, bounding_points):
+def figma_to_lottie_shape(node: NodeItem):
     NodeType = node.map.schema.NodeType
-    points = []
 
     match node.type:
         case NodeType.ELLIPSE:
@@ -210,11 +241,6 @@ def figma_to_lottie_shape(node: NodeItem, bounding_points):
     group.add_shape(shape)
     shape_style_to_lottie(node, group)
     group.name = node.figma.name
-
-    bounding_points.append(NVector(0, 0))
-    bounding_points.append(NVector(node.figma.size.x, 0))
-    bounding_points.append(NVector(node.figma.size.x, node.figma.size.y))
-    bounding_points.append(NVector(0, node.figma.size.y))
 
     if node.figma.blendMode is not None:
         group.blend_mode = enum_mapping.blend_mode.to_lottie(node.figma.blendMode)
@@ -387,3 +413,9 @@ def line_to_lottie(node: NodeItem):
     shape.shape.value.add_point(NVector(0, 0))
     shape.shape.value.add_point(vector_to_lottie(node.figma.size))
     return shape
+
+
+def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Precomp):
+    layer.reference_id = comp.id
+    layer.width = comp.width
+    layer.height = comp.height
