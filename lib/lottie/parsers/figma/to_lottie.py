@@ -5,6 +5,7 @@ from ... import objects
 from ...nvector import NVector
 from ...utils.transform import TransformMatrix
 from ...utils.color import Color
+from ...utils.binstream import BinStream, Endian
 
 
 def transform_to_lottie(obj: schema.Matrix, transform=None):
@@ -45,7 +46,7 @@ class NodeItem:
 class NodeMap:
     def __init__(self, schema):
         self.nodes = {}
-        self.blobs = {}
+        self.blobs = []
         self.document = None
         self.schema = schema
 
@@ -292,9 +293,51 @@ def rect_to_lottie(node: NodeItem):
     return shape
 
 
+def blob_to_bezier(blob: bytes):
+    bez = objects.bezier.Bezier()
+    f = BinStream(blob, Endian.Little)
+
+    point_count = f.read_uint32()
+    seg_count = f.read_uint32()
+    f.skip(4)
+    bez.closed = seg_count == point_count
+    bez.node_types = ""
+
+    for i in range(point_count):
+        mirror = f.read_uint32()
+        if mirror == 1:
+            bez.node_types += "s"
+        elif mirror == 2:
+            bez.node_types += "z"
+        else:
+            bez.node_types += "c"
+
+        x = f.read_float32()
+        y = f.read_float32()
+        bez.add_point(NVector(x, y))
+
+    for i in range(seg_count):
+        f.skip(4)
+
+        p = f.read_uint32()
+        x = f.read_float32()
+        y = f.read_float32()
+        bez.out_tangents[p] = NVector(x, y)
+
+        p = f.read_uint32()
+        x = f.read_float32()
+        y = f.read_float32()
+        bez.in_tangents[p] = NVector(x, y)
+
+    return bez
+
 def vector_shape_to_lottie(node: NodeItem):
-    shape = objects.shapes.Bezier()
-    # TODO
+    shape = objects.shapes.Path()
+
+    if node.figma.vectorData and node.figma.vectorData.vectorNetworkBlob is not None:
+        blob = node.map.blobs[node.figma.vectorData.vectorNetworkBlob]
+        shape.shape.value = blob_to_bezier(blob)
+
     return shape
 
 

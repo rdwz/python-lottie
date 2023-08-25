@@ -108,12 +108,12 @@ for index, filename in args.blob:
     with open(filename, "wb") as f:
         f.write(file.data.blobs[int(index)].bytes)
 
+if args.figma:
+    with open(args.figma, "wb") as f:
+        file.write_data(f)
+
 if args.lottie:
     anim = message_to_lottie(file.data, file.schema.module)
 
     with open(args.lottie, "w") as f:
         export_lottie(anim, f, pretty=True)
-
-if args.figma:
-    with open(args.figma, "wb") as f:
-        file.write_data(f)

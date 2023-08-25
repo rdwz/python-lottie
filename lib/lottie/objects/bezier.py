@@ -129,6 +129,7 @@ class Bezier(LottieObject):
         LottieProp("in_tangents", "i", NVector, True),
         LottieProp("out_tangents", "o", NVector, True),
         LottieProp("vertices", "v", NVector, True),
+        LottieProp("node_types", "nt", str, False),
     ]
 
     def __init__(self):
@@ -143,6 +144,7 @@ class Bezier(LottieObject):
         #self.rel_tangents = rel_tangents
         ## More convent way to  access points
         self.points = BezierView(self)
+        self.node_types = None
 
     def clone(self):
         clone = Bezier()
