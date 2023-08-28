@@ -87,6 +87,10 @@ if args.clipboard:
     if not file.load_clipboard_data(html):
         sys.stderr.write("No clipboard data\n")
         sys.exit(1)
+
+    if args.file:
+        with open(args.file, "wb") as f:
+            file.write_data(f)
 else:
     with open(args.file, "rb") as f:
         file = FigmaFile()

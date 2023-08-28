@@ -33,6 +33,7 @@ class NodeItem:
         self.parent = None
         self.children = []
         self.map = map
+        self.animation_start = None
 
     @property
     def type(self):
@@ -50,7 +51,7 @@ class NodeMap:
         self.blobs = []
         self.document = None
         self.schema = schema
-        self.animation = None
+        self.animation: objects.animation.Animation = None
         self.pending_precomps = []
         self.pending_precomp_layers = []
 
@@ -143,12 +144,12 @@ def node_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
 
     adj = objects.layers.NullLayer()
     adj.name = comp.name
-    adj.index = 0
-    comp.add_layer(adj)
+    layers = LayerSpan.from_comp(comp)
+    layers.add_layer(adj)
     bounding_points = []
 
-    for child in reversed(canvas.children):
-        figma_to_lottie_layer(child, comp, adj.index, bounding_points)
+    for child in canvas.children:
+        figma_to_lottie_layer(child, layers, adj.index, bounding_points)
 
     if bounding_points:
         bb = objects.shapes.BoundingBox()
@@ -160,9 +161,65 @@ def node_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
         adj.transform.position.value = NVector(-bb.x1, -bb.y1)
 
 
-def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition, parent_index, bounding_points):
+class LayerManager:
+    def __init__(self, comp: objects.composition.Composition):
+        self.comp = comp
+        self.layer_index = len(comp.layers) - 1
+
+    def next_index(self):
+        self.layer_index += 1
+        return self.layer_index
+
+    def span(self):
+        return LayerSpan(self)
+
+
+class LayerSpan:
+    def __init__(self, manager: LayerManager):
+        self.layers = []
+        self.manager = manager
+
+    def __enter__(self, *a):
+        return self
+
+    def __exit__(self, *a):
+        self.flush()
+
+    def flush(self):
+        self.manager.comp.layers += self.layers
+        self.layers = []
+
+    def add_over(self, layers: "LayerSpan"):
+        self.layers = layers.layers + self.layers
+        layers.layers = []
+
+    def add_under(self, layers: "LayerSpan"):
+        self.layers = self.layers + layers.layers
+        layers.layers = []
+
+    def add_layer(self, layer: objects.layers.Layer):
+        if layer.index is None:
+            layer.index = self.manager.next_index()
+        self.layers.append(layer)
+
+    def next_index(self):
+        return self.manager.next_index()
+
+    @classmethod
+    def from_comp(cls, comp: objects.composition.Composition):
+        return cls(LayerManager(comp))
+
+    def span(self):
+        return self.manager.span()
+
+
+def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bounding_points):
+    if node.lottie is not None:
+        return
+
     NodeType = node.map.schema.NodeType
     children = node.children
+    frame = False
 
     match node.type:
         case NodeType.TEXT:
@@ -171,8 +228,11 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
         case NodeType.MEDIA:
             layer = objects.layers.ImageLayer()
             # TODO
-        case NodeType.CANVAS | NodeType.FRAME:
-            layer = objects.layers.NullLayer()
+        case NodeType.FRAME:
+            shape = figma_to_lottie_shape(node)
+            layer = objects.layers.ShapeLayer()
+            layer.shapes.append(shape)
+            frame = True
         case NodeType.SYMBOL:
             layer = objects.layers.PreCompLayer()
             node.map.pending_precomp_layers.append((layer, node.figma.guid))
@@ -189,9 +249,9 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
             layer.shapes.append(shape)
 
     layer.name = node.figma.name
-    layer.index = len(comp.layers)
-    comp.add_layer(layer)
     layer.parent_index = parent_index
+    layers.add_layer(layer)
+
 
     points = [
         NVector(0, 0),
@@ -200,8 +260,17 @@ def figma_to_lottie_layer(node: NodeItem, comp: objects.composition.Composition,
         NVector(0, node.figma.size.y),
     ]
 
-    for child in reversed(children):
-        figma_to_lottie_layer(child, comp, layer.index, points)
+    sub_layers = layers.span()
+
+    for child in children:
+        figma_to_lottie_layer(child, sub_layers, layer.index, points)
+
+    if frame:
+        layers.add_over(sub_layers)
+        if node.figma.prototypeInteractions:
+            prototype_to_lottie(node, layer, layers)
+    else:
+        layers.add_under(sub_layers)
 
     matrix = transform_to_lottie(node.figma.transform, layer.transform)[1]
     for point in points:
@@ -218,7 +287,7 @@ def figma_to_lottie_shape(node: NodeItem):
             shape = ellipse_to_lottie(node)
         case NodeType.VECTOR:
             shape = vector_shape_to_lottie(node)
-        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION:
+        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION  | NodeType.FRAME:
             shape = rect_to_lottie(node)
         case NodeType.REGULAR_POLYGON:
             shape = polystar_to_lottie(node, False)
@@ -419,3 +488,127 @@ def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Preco
     layer.reference_id = comp.id
     layer.width = comp.width
     layer.height = comp.height
+
+
+def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: LayerSpan):
+    interactions = []
+    InteractionType = node.map.schema.InteractionType
+    TransitionType = node.map.schema.TransitionType
+    interaction: node.map.schema.PrototypeInteraction = None
+    action: node.map.schema.PrototypeAction = None
+    if node.animation_start is None:
+        node.animation_start = 0
+    fps = node.map.animation.frame_rate
+
+    for interaction in node.figma.prototypeInteractions:
+        type = interaction.event.interactionType
+        score = type.value
+        if type == InteractionType.AFTER_TIMEOUT:
+            score = -1
+        elif type == InteractionType.NONE:
+            score = 100
+
+        interactions.append((score, interaction))
+
+    first = True
+
+    for _, interaction in sorted(interactions):
+
+        offset = 0
+        if interaction.event.interactionType == InteractionType.AFTER_TIMEOUT:
+            timeout = interaction.event.transitionTimeout
+            if timeout is None:
+                timeout = 0.8
+            offset = timeout * fps
+
+        for action in interaction.actions:
+            if action.connectionType != node.map.schema.ConnectionType.INTERNAL_NODE:
+                continue
+            sub_layers = layers.span()
+            next_node = node.map.node(action.transitionNodeID)
+            start_frame = node.animation_start + offset
+            end_frame = action.transitionDuration * fps + start_frame
+            next_node.animation_start = end_frame
+            next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.index, [])
+            next_layer.transform = objects.helpers.Transform()
+            if first:
+                first = False
+                transition = objects.easing.Bezier(
+                    NVector(
+                        action.easingFunction[0],
+                        action.easingFunction[1],
+                    ),
+                    NVector(
+                        action.easingFunction[2],
+                        action.easingFunction[3],
+                    )
+                )
+
+                # TODO SMART_ANIMATE SLIDE IN/OUT
+                match action.transitionType:
+                    case TransitionType.INSTANT_TRANSITION:
+                        layer.transform.opacity.add_keyframe(start_frame, 100, objects.easing.Hold())
+                        layer.transform.opacity.add_keyframe(end_frame, 0)
+                        layers.add_under(sub_layers)
+                    case TransitionType.DISSOLVE | TransitionType.SMART_ANIMATE:
+                        layer.transform.opacity.add_keyframe(start_frame, 100, transition)
+                        layer.transform.opacity.add_keyframe(end_frame, 0)
+                        layers.add_under(sub_layers)
+                    case TransitionType.MOVE_FROM_RIGHT | TransitionType.SLIDE_FROM_RIGHT:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(node.figma.size.x, 0), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layers.add_over(sub_layers)
+                    case TransitionType.MOVE_FROM_LEFT | TransitionType.SLIDE_FROM_LEFT:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(-next_node.figma.size.x, 0), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layers.add_over(sub_layers)
+                    case TransitionType.MOVE_FROM_TOP | TransitionType.SLIDE_FROM_TOP:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(0, -node.figma.size.y), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layers.add_over(sub_layers)
+                    case TransitionType.MOVE_FROM_BOTTOM | TransitionType.SLIDE_FROM_BOTTOM:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(0, node.figma.size.y), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layers.add_over(sub_layers)
+                    case TransitionType.MOVE_OUT_TO_RIGHT | TransitionType.SLIDE_OUT_TO_RIGHT:
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(-node.figma.size.x, 0))
+                        layers.add_under(sub_layers)
+                    case TransitionType.MOVE_OUT_TO_LEFT | TransitionType.SLIDE_OUT_TO_LEFT:
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(node.figma.size.x, 0))
+                        layers.add_under(sub_layers)
+                    case TransitionType.MOVE_OUT_TO_TOP | TransitionType.SLIDE_OUT_TO_TOP:
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(0, -node.figma.size.y))
+                        layers.add_under(sub_layers)
+                    case TransitionType.MOVE_OUT_TO_BOTTOM | TransitionType.SLIDE_OUT_TO_BOTTOM:
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(0, node.figma.size.y))
+                        layers.add_under(sub_layers)
+                    case TransitionType.PUSH_FROM_RIGHT:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(node.figma.size.x, 0), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(-node.figma.size.x, 0))
+                        layers.add_under(sub_layers)
+                    case TransitionType.PUSH_FROM_LEFT:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(-node.figma.size.x, 0), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(node.figma.size.x, 0))
+                        layers.add_under(sub_layers)
+                    case TransitionType.PUSH_FROM_TOP:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(0, -node.figma.size.y), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(0, node.figma.size.y))
+                        layers.add_under(sub_layers)
+                    case TransitionType.PUSH_FROM_BOTTOM:
+                        next_layer.transform.position.add_keyframe(start_frame, NVector(0, node.figma.size.y), transition)
+                        next_layer.transform.position.add_keyframe(end_frame, NVector(0, 0))
+                        layer.transform.position.add_keyframe(end_frame, NVector(0, 0), transition)
+                        layer.transform.position.add_keyframe(start_frame, NVector(0, -node.figma.size.y))
+                        layers.add_under(sub_layers)
+                    case _:
+                        layers.add_under(sub_layers)

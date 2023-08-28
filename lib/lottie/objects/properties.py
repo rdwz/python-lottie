@@ -281,7 +281,8 @@ class AnimatableMixin:
             if self.keyframes[-1].time == time:
                 if value != self.keyframes[-1].value:
                     self.keyframes[-1].value = value
-                return
+                interp(self.keyframes[-1])
+                return self.keyframes[-1]
             elif end:
                 self.keyframes[-1].end = value.clone()
 
@@ -700,7 +701,7 @@ class GradientColors(LottieObject):
         @param stops  Iterable of (offset, Color) tuples
         @param ease   Easing function
         """
-        self.colors.add_keyframe(time, self._flatten_stops(stops), ease)
+        return self.colors.add_keyframe(time, self._flatten_stops(stops), ease)
 
     def get_stops(self, keyframe=0):
         if keyframe is not None:
@@ -743,7 +744,7 @@ class Value(AnimatableMixin, LottieObject):
         super().__init__(value)
 
     def add_keyframe(self, time, value, ease=easing.Linear()):
-        super().add_keyframe(time, NVector(value), ease)
+        return super().add_keyframe(time, NVector(value), ease)
 
     def get_value(self, time=0):
         v = super().get_value(time)
