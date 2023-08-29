@@ -34,6 +34,9 @@ class NodeItem:
         self.children = []
         self.map = map
         self.animation_start = None
+        self.interaction_index = None
+        self.interaction_head = None
+        self.interaction_rendered = False
 
     @property
     def type(self):
@@ -80,6 +83,27 @@ class NodeMap:
 
     def process_message(self, message: schema.Message):
         if message.nodeChanges is not None:
+
+            # Assign interaction_index to all items that are the target of an interaction
+            interaction_index = 0
+            for node in message.nodeChanges:
+                item = self.add_node(node)
+                if node.prototypeInteractions:
+                    if not item.interaction_index:
+                        interaction_index += 1
+                        item.interaction_index = interaction_index
+                        item.interaction_head = interaction_index
+
+                    index = item.interaction_index
+
+                    for interaction in node.prototypeInteractions:
+                        for action in interaction.actions:
+                            if action.connectionType == self.schema.ConnectionType.INTERNAL_NODE:
+                                target = self.node(action.transitionNodeID)
+                                if interaction_index != target.interaction_index:
+                                    target.interaction_head = None
+                                target.interaction_index = interaction_index
+
             for node in message.nodeChanges:
                 item = self.process_change(node)
                 if node.type == self.schema.NodeType.DOCUMENT:
@@ -149,7 +173,9 @@ def node_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
     bounding_points = []
 
     for child in canvas.children:
-        figma_to_lottie_layer(child, layers, adj.index, bounding_points)
+        figma_to_lottie_layer(child, layers, adj.index, bounding_points, True)
+
+    layers.flush()
 
     if bounding_points:
         bb = objects.shapes.BoundingBox()
@@ -179,12 +205,6 @@ class LayerSpan:
         self.layers = []
         self.manager = manager
 
-    def __enter__(self, *a):
-        return self
-
-    def __exit__(self, *a):
-        self.flush()
-
     def flush(self):
         self.manager.comp.layers += self.layers
         self.layers = []
@@ -213,13 +233,13 @@ class LayerSpan:
         return self.manager.span()
 
 
-def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bounding_points):
-    if node.lottie is not None:
+def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bounding_points, skip_interactions):
+    # Created by something else
+    if skip_interactions and node.interaction_head != node.interaction_index:
         return
 
     NodeType = node.map.schema.NodeType
     children = node.children
-    frame = False
 
     match node.type:
         case NodeType.TEXT:
@@ -228,11 +248,6 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
         case NodeType.MEDIA:
             layer = objects.layers.ImageLayer()
             # TODO
-        case NodeType.FRAME:
-            shape = figma_to_lottie_shape(node)
-            layer = objects.layers.ShapeLayer()
-            layer.shapes.append(shape)
-            frame = True
         case NodeType.SYMBOL:
             layer = objects.layers.PreCompLayer()
             node.map.pending_precomp_layers.append((layer, node.figma.guid))
@@ -263,9 +278,9 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     sub_layers = layers.span()
 
     for child in children:
-        figma_to_lottie_layer(child, sub_layers, layer.index, points)
+        figma_to_lottie_layer(child, sub_layers, layer.index, points, True)
 
-    if frame:
+    if node.figma.prototypeInteractions:
         layers.add_over(sub_layers)
         if node.figma.prototypeInteractions:
             prototype_to_lottie(node, layer, layers)
@@ -491,6 +506,11 @@ def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Preco
 
 
 def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: LayerSpan):
+    # Avoid loops
+    if node.interaction_rendered:
+        return
+    node.interaction_rendered = True
+
     interactions = []
     InteractionType = node.map.schema.InteractionType
     TransitionType = node.map.schema.TransitionType
@@ -529,7 +549,7 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
             start_frame = node.animation_start + offset
             end_frame = action.transitionDuration * fps + start_frame
             next_node.animation_start = end_frame
-            next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.index, [])
+            next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.index, [], False)
             next_layer.transform = objects.helpers.Transform()
             if first:
                 first = False
