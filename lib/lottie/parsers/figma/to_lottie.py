@@ -1,6 +1,10 @@
+import io
 import math
+import json
 import bisect
+import base64
 import urllib.request
+import PIL.Image
 
 from . import model, schema, enum_mapping
 from ... import objects
@@ -58,6 +62,9 @@ class NodeMap:
         self.pending_precomps = []
         self.pending_precomp_layers = []
         self.interaction_delay = 0.5
+        self.paste_key = None
+        self.images = {}
+        self.pending_images = {}
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -83,6 +90,8 @@ class NodeMap:
         return item
 
     def process_message(self, message: schema.Message):
+        self.paste_key = message.pasteFileKey
+
         if message.nodeChanges is not None:
 
             # Assign interaction_index to all items that are the target of an interaction
@@ -133,8 +142,34 @@ class NodeMap:
             precomp_layer(layer, comp)
         self.pending_precomp_layers = []
 
+        if self.pending_images:
+            req_data = json.dumps({"sha1s": list(self.pending_images.keys())}).encode("ascii")
+            query_url = "https://www.figma.com/file/%s/image/batch" % self.paste_key
+            request = urllib.request.Request(query_url, req_data, {"Content-Type": "application/json"})
+            response = urllib.request.urlopen(request)
+            resp_data = json.loads(response.read())
+            for hash, url in resp_data["meta"]["s3_urls"]:
+                asset = self.pending_images[hash]
+                asset.path = url
+                img_data = urllib.request.urlopen(url).read()
+                img = PIL.Image.open(io.BytesIO(img_data))
 
-def message_to_lottie(message, kiwi_schema=schema):
+            self.pending_images = {}
+
+    def image_id(self, image: schema.Image):
+        if image.hash in self.images:
+            return self.images[image.hash]
+
+        asset = objects.assets.Image()
+        asset.id = image.hash
+        asset.name = image.name or "Image"
+        self.images[image.hash] = asset
+        hex_hash = base64.b16encode(image.hash).lower().decode("ascii")
+        self.pending_images[hex_hash] = asset
+        return asset
+
+
+def message_to_lottie(message: schema.Message, kiwi_schema=schema):
     nodes = NodeMap(kiwi_schema)
     nodes.process_message(message)
     if not nodes.document:
