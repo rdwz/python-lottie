@@ -153,6 +153,8 @@ class NodeMap:
                 asset.path = url
                 img_data = urllib.request.urlopen(url).read()
                 img = PIL.Image.open(io.BytesIO(img_data))
+                asset.width = img.width
+                asset.height = img.height
 
             self.pending_images = {}
 
