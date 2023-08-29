@@ -57,6 +57,7 @@ class NodeMap:
         self.animation: objects.animation.Animation = None
         self.pending_precomps = []
         self.pending_precomp_layers = []
+        self.interaction_delay = 0.5
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -568,20 +569,19 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
 
     for _, interaction in sorted(interactions):
 
-        # TODO default delay so interactions aren't triggered immediately
-        offset = 0
+        delay = node.map.interaction_delay * fps
         if interaction.event.interactionType == InteractionType.AFTER_TIMEOUT:
             timeout = interaction.event.transitionTimeout
             if timeout is None:
                 timeout = 0.8
-            offset = timeout * fps
+            delay = timeout * fps
 
         for action in interaction.actions:
             if action.connectionType != node.map.schema.ConnectionType.INTERNAL_NODE:
                 continue
             sub_layers = layers.span()
             next_node = node.map.node(action.transitionNodeID)
-            start_frame = node.animation_start + offset
+            start_frame = node.animation_start + delay
             end_frame = action.transitionDuration * fps + start_frame
             next_node.animation_start = end_frame
             next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.parent_index, [], True)
