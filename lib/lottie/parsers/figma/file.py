@@ -114,9 +114,12 @@ class FigmaFile:
                 elif info.filename == "thumbnail.png":
                     with zf.open(info) as f:
                         self.thumbnail = PIL.Image.open(f)
+                        self.thumbnail.load()
                 elif info.filename.startswith("images/") and not info.is_dir():
                     with zf.open(info) as f:
-                        self.assets[info.filename.split("/", 1)[1]] = PIL.Image.open(f)
+                        image = PIL.Image.open(f)
+                        image.load()
+                        self.assets[info.filename.split("/", 1)[1]] = image
 
     def load(self, file):
         header = file.read(4)

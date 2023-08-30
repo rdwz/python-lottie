@@ -7,6 +7,7 @@ import urllib.request
 import PIL.Image
 
 from . import model, schema, enum_mapping
+from .file import FigmaFile
 from ... import objects
 from ...nvector import NVector
 from ...utils.transform import TransformMatrix
@@ -53,7 +54,7 @@ class NodeItem:
 
 
 class NodeMap:
-    def __init__(self, schema):
+    def __init__(self, schema, file: FigmaFile):
         self.nodes = {}
         self.blobs = []
         self.document = None
@@ -65,6 +66,7 @@ class NodeMap:
         self.paste_key = None
         self.images = {}
         self.pending_images = []
+        self.file = file
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -169,13 +171,21 @@ class NodeMap:
         asset.id = hex_hash
         asset.name = image.name or "Image"
         self.images[hex_hash] = asset
-        self.pending_images.append(hex_hash)
         self.animation.assets.append(asset)
+
+        if hex_hash in self.file.assets:
+            asset.load(self.file.assets[hex_hash])
+        else:
+            self.pending_images.append(hex_hash)
         return asset
 
 
-def message_to_lottie(message: schema.Message, kiwi_schema=schema):
-    nodes = NodeMap(kiwi_schema)
+def figma_file_to_lottie(file: FigmaFile):
+    return message_to_lottie(file.data, file, file.schema.module)
+
+
+def message_to_lottie(message: schema.Message, file: FigmaFile, kiwi_schema=schema):
+    nodes = NodeMap(kiwi_schema, file)
     nodes.process_message(message)
     if not nodes.document:
         return objects.animation.Animation()

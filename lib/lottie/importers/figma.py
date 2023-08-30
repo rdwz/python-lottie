@@ -1,7 +1,7 @@
 import pathlib
 from .base import importer
 from ..parsers.baseporter import ExtraOption
-from ..parsers.figma.to_lottie import message_to_lottie
+from ..parsers.figma.to_lottie import figma_file_to_lottie
 from ..parsers.figma.file import FigmaFile
 
 
@@ -14,4 +14,4 @@ def import_figma(animation, file, frame=0):
     else:
         ff.load(file)
 
-    return message_to_lottie(ff.data, ff.schema.module)
+    return figma_file_to_lottie(ff)

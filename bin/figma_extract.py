@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(
 ))
 from lottie.parsers.figma.file import FigmaFile
 from lottie.parsers.figma.kiwi import json_encode
-from lottie.parsers.figma.to_lottie import message_to_lottie
+from lottie.parsers.figma.to_lottie import figma_file_to_lottie
 from lottie.exporters.core import export_lottie
 
 
@@ -117,7 +117,7 @@ if args.figma:
         file.write_data(f)
 
 if args.lottie:
-    anim = message_to_lottie(file.data, file.schema.module)
+    anim = figma_file_to_lottie(file)
 
     with open(args.lottie, "w") as f:
         export_lottie(anim, f, pretty=True)
