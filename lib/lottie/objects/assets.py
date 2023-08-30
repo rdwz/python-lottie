@@ -7,6 +7,7 @@ from .base import LottieProp, PseudoBool, Index
 from .layers import Layer
 from .composition import Composition
 from .helpers import VisualObject
+from ..nvector import NVector
 
 
 ## @ingroup Lottie
@@ -160,6 +161,10 @@ class Image(FileAsset):
         lottie_image.width = image.width
         lottie_image.height = image.height
         return lottie_image
+
+    @property
+    def size(self):
+        return NVector(self.width, self.height)
 
 
 ## @ingroup Lottie
