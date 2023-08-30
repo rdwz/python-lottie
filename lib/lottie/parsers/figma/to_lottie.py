@@ -52,6 +52,24 @@ class NodeItem:
         if parent:
             bisect.insort(parent.children, self, key=lambda it: it.figma.parentIndex.position)
 
+    def child_dict(self, dict=None, handled=None):
+        if dict is None:
+            dict = {}
+            handled = set()
+
+        for child in self.children:
+            name = child.figma.name
+            if name:
+                if name in handled:
+                   out.pop(name, None)
+                else:
+                    out[name] = child
+                    handled.add(name)
+
+            child.child_dict(dict, handled)
+
+        return dict
+
 
 class NodeMap:
     def __init__(self, schema, file: FigmaFile):
@@ -347,6 +365,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     layer.parent_index = parent_index
     layers.add_layer(layer)
     layers.add_under(extra_layers)
+    node.lottie = layer
 
 
     points = [
@@ -379,31 +398,50 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     return layer
 
 
-def figma_to_lottie_shape(node: NodeItem, extra_layers: LayerSpan):
+def shape_args(node: NodeItem):
     NodeType = node.map.schema.NodeType
+
+    func = None
+    type = None
+    args = []
 
     match node.type:
         case NodeType.ELLIPSE:
-            shape = ellipse_to_lottie(node)
+            func = ellipse_to_lottie
+            type = objects.shapes.Ellipse
         case NodeType.VECTOR:
-            shape = vector_shape_to_lottie(node)
+            func = vector_shape_to_lottie
+            type = objects.shapes.Path
         case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION  | NodeType.FRAME:
-            shape = rect_to_lottie(node)
+            func = rect_shape_to_lottie
+            type = objects.shapes.Rect
         case NodeType.REGULAR_POLYGON:
-            shape = polystar_to_lottie(node, False)
+            func = polystar_to_lottie
+            type = objects.shapes.Star
+            args = [False]
         case NodeType.STAR:
-            shape = polystar_to_lottie(node, True)
+            func = polystar_to_lottie
+            type = objects.shapes.Star
+            args = [True]
         case NodeType.LINE:
-            shape = line_to_lottie(node)
+            func = line_to_lottie
+            type = objects.shapes.Path
         # TODO
         # case NodeType.BOOLEAN_OPERATION:
             # shape = boolean_to_lottie(node)
-        case _:
-            shape = None
+    return func, type, args
 
-    if shape is None:
+
+def figma_to_lottie_shape(node: NodeItem, extra_layers: LayerSpan):
+    func, type, args = shape_args(node)
+
+    if func is None:
         return None
 
+    wrapper = ShapePropertyWriter(node, type())
+    func(wrapper, *args)
+
+    shape = wrapper.outer_shape()
     shape.name = node.figma.name
 
     group = objects.shapes.Group()
@@ -501,18 +539,69 @@ def vector_to_lottie(value: schema.Vector):
     return NVector(value.x, value.y)
 
 
-def ellipse_to_lottie(node: NodeItem):
-    shape = objects.shapes.Ellipse()
-    shape.size.value = vector_to_lottie(node.figma.size)
-    shape.position.value = shape.size.value / 2
-    return shape
+class AnimationArgs:
+    def __init__(self):
+        self.start_frame = self.end_frame = 0
+        self.transition = None
+
+    def set(self, property, value1, value2=None):
+        if value2 is None:
+            value2 = value1
+            value1 = property.get_value(self.start_frame)
+        property.add_keyframe(self.start_frame, value1, self.transition)
+        property.add_keyframe(self.end_frame, value2)
 
 
-def rect_to_lottie(node: NodeItem):
-    shape = objects.shapes.Rect()
-    shape.size.value = vector_to_lottie(node.figma.size)
-    shape.position.value = shape.size.value / 2
-    return shape
+class ShapePropertyWriter:
+    def __init__(self, node: NodeItem, shape: objects.VisualObject, animation: AnimationArgs|None = None):
+        self.node = node
+        self.shape = shape
+        self.animation = animation
+        self.shape_wrapper = None
+
+    def set(self, prop_name, value, shape=None):
+        prop = getattr(shape or self.shape, prop_name)
+        if self.animation is not None:
+            self.animation.set(prop, value)
+        else:
+            prop.value = value
+
+    def get(self, prop_name, shape=None):
+        prop = getattr(shape or self.shape, prop_name)
+        return prop.get_value(self.start_frame)
+
+    @property
+    def figma(self):
+        return self.node.figma
+
+    @property
+    def map(self):
+        return self.node.map
+
+    def ensure_wrapper(self):
+        if self.shape_wrapper:
+            return self.shape_wrapper
+
+        group = objects.shapes.Group()
+        group.add_shape(self.shape)
+        self.shape_wrapper = group
+        return group
+
+    def outer_shape(self):
+        if self.shape_wrapper:
+            return self.shape_wrapper
+        return self.shape
+
+
+def ellipse_to_lottie(node: ShapePropertyWriter):
+    size = vector_to_lottie(node.figma.size)
+    node.set("size", size)
+    node.set("position", size)
+
+
+def rect_to_lottie(node: ShapePropertyWriter):
+    ellipse_to_lottie(node)
+    # TODO rounded corners
 
 
 def blob_to_bezier(blob: bytes):
@@ -554,49 +643,39 @@ def blob_to_bezier(blob: bytes):
     return bez
 
 
-def vector_shape_to_lottie(node: NodeItem):
-    shape = objects.shapes.Path()
-
+def vector_shape_to_lottie(node: ShapePropertyWriter):
     if node.figma.vectorData and node.figma.vectorData.vectorNetworkBlob is not None:
         blob = node.map.blobs[node.figma.vectorData.vectorNetworkBlob]
-        shape.shape.value = blob_to_bezier(blob)
-
-    return shape
+        node.set("shape", blob_to_bezier(blob))
 
 
-def polystar_to_lottie(node: NodeItem, star: bool):
-    shape = objects.shapes.Star()
-    shape.points.value = node.figma.count
+def polystar_to_lottie(node: ShapePropertyWriter, star: bool):
+    node.set("points", node.figma.count)
     size = vector_to_lottie(node.figma.size)
 
     if size.x == size.y:
-        shape.outer_radius.value = size.x / 2
-        shape.position.value = size / 2
-        ret_shape = shape
+        node.set("outer_radius", size.x / 2)
+        node.set("position", size / 2)
     else:
-        shape.outer_radius.value = 50
-        shape.name = node.figma.name
-        group = objects.shapes.Group()
-        group.add_shape(shape)
-        group.transform.scale.value = size
-        group.transform.position.value = size / 2
-        ret_shape = group
+        node.set("outer_radius", 50)
+        node.shape.name = node.figma.name
+        group = node.ensure_wrapper()
+        node.set("scale", size, group.transform)
+        node.set("position", size / 2, group.transform)
 
     if star:
-        shape.star_type = objects.shapes.StarType.Star
-        shape.inner_radius.value = shape.outer_radius.value * node.figma.starInnerScale
+        node.shape.star_type = objects.shapes.StarType.Star
+        node.set("inner_radius", node.get("outer_radius") * node.figma.starInnerScale)
     else:
-        shape.star_type = objects.shapes.StarType.Polygon
-        shape.inner_radius = shape.inner_roundness = None
-
-    return ret_shape
+        node.shape.star_type = objects.shapes.StarType.Polygon
+        node.shape.inner_radius = node.shape.inner_roundness = None
 
 
-def line_to_lottie(node: NodeItem):
-    shape = objects.shapes.Path()
-    shape.shape.value.add_point(NVector(0, 0))
-    shape.shape.value.add_point(vector_to_lottie(node.figma.size))
-    return shape
+def line_to_lottie(node: ShapePropertyWriter):
+    bez = objects.bezier.Bezier()
+    bez.add_point(NVector(0, 0))
+    bez.add_point(vector_to_lottie(node.figma.size))
+    node.set("shape", bez)
 
 
 def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Precomp):
@@ -605,10 +684,9 @@ def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Preco
     layer.height = comp.height
 
 
-def push_layer(layer, before, after, transition, start_frame, end_frame):
+def push_layer(layer, before, after, animation: AnimationArgs):
     start_pos = layer.transform.position.get_value(start_frame)
-    layer.transform.position.add_keyframe(start_frame, start_pos + before, transition)
-    layer.transform.position.add_keyframe(end_frame, start_pos + after)
+    animation.set(layer.transform.position, start_pos + before, start_pos + after)
 
 
 def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: LayerSpan):
@@ -652,23 +730,41 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                 continue
             sub_layers = layers.span()
             next_node = node.map.node(action.transitionNodeID)
-            start_frame = node.animation_start + delay
-            end_frame = action.transitionDuration * fps + start_frame
-            next_node.animation_start = end_frame
+            animation = AnimationArgs()
+            animation.start_frame = node.animation_start + delay
+            animation.end_frame = action.transitionDuration * fps + animation.start_frame
+            next_node.animation_start = animation.end_frame
+
+            if layer.out_point is None or layer.out_point < animation.end_frame:
+                layer.out_point = round(animation.end_frame)
+
+            if layer.in_point is None or layer.in_point > animation.start_frame:
+                layer.in_point = round(animation.start_frame)
+
+            if TransitionType.SMART_ANIMATE and first:
+                first = False
+                animation.transition = objects.easing.Bezier(
+                    NVector(
+                        action.easingFunction[0],
+                        action.easingFunction[1],
+                    ),
+                    NVector(
+                        action.easingFunction[2],
+                        action.easingFunction[3],
+                    )
+                )
+                smart_animate(node, next_node, animation, sub_layers)
+                layers.add_over(sub_layers)
+                continue
+
             next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.parent_index, [], True)
             next_layer.transform = objects.helpers.Transform()
             next_layer.transform.position.value = layer.transform.position.get_value(start_frame)
             next_layer.transform.rotation.value = layer.transform.rotation.get_value(start_frame)
 
-            if layer.out_point is None or layer.out_point < end_frame:
-                layer.out_point = round(end_frame)
-
-            if layer.in_point is None or layer.in_point > start_frame:
-                layer.in_point = round(start_frame)
-
             if first:
                 first = False
-                transition = objects.easing.Bezier(
+                animation.transition = objects.easing.Bezier(
                     NVector(
                         action.easingFunction[0],
                         action.easingFunction[1],
@@ -679,55 +775,95 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                     )
                 )
 
-                # TODO SMART_ANIMATE SLIDE IN/OUT
+                # TODO SLIDE IN/OUT
                 match action.transitionType:
                     case TransitionType.INSTANT_TRANSITION:
-                        layer.transform.opacity.add_keyframe(start_frame, 100, objects.easing.Hold())
-                        layer.transform.opacity.add_keyframe(end_frame, 0)
+                        layer.transform.opacity.add_keyframe(animation.start_frame, 100, objects.easing.Hold())
+                        layer.transform.opacity.add_keyframe(animation.end_frame, 0)
                         layers.add_under(sub_layers)
-                    case TransitionType.DISSOLVE | TransitionType.SMART_ANIMATE:
-                        layer.transform.opacity.add_keyframe(start_frame, 100, transition)
-                        layer.transform.opacity.add_keyframe(end_frame, 0)
+                    case TransitionType.DISSOLVE:
+                        layer.transform.opacity.add_keyframe(animation.start_frame, 100, animation.transition)
+                        layer.transform.opacity.add_keyframe(animation.end_frame, 0)
                         layers.add_under(sub_layers)
                     case TransitionType.MOVE_FROM_RIGHT | TransitionType.SLIDE_FROM_RIGHT:
-                        push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
                     case TransitionType.MOVE_FROM_LEFT | TransitionType.SLIDE_FROM_LEFT:
-                        push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
                     case TransitionType.MOVE_FROM_TOP | TransitionType.SLIDE_FROM_TOP:
-                        push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
                     case TransitionType.MOVE_FROM_BOTTOM | TransitionType.SLIDE_FROM_BOTTOM:
-                        push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
                     case TransitionType.MOVE_OUT_TO_RIGHT | TransitionType.SLIDE_OUT_TO_RIGHT:
-                        push_layer(layer, NVector(-node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.MOVE_OUT_TO_LEFT | TransitionType.SLIDE_OUT_TO_LEFT:
-                        push_layer(layer, NVector(node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.MOVE_OUT_TO_TOP | TransitionType.SLIDE_OUT_TO_TOP:
-                        push_layer(layer, NVector(0, -node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.MOVE_OUT_TO_BOTTOM | TransitionType.SLIDE_OUT_TO_BOTTOM:
-                        push_layer(layer, NVector(0, node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
+                        push_layer(layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.PUSH_FROM_RIGHT:
-                        push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
-                        push_layer(layer, NVector(0, 0), NVector(-node.figma.size.x, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
+                        push_layer(layer, NVector(0, 0), NVector(-node.figma.size.x, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.PUSH_FROM_LEFT:
-                        push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), transition, start_frame, end_frame)
-                        push_layer(layer, NVector(0, 0), NVector(node.figma.size.x, 0), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
+                        push_layer(layer, NVector(0, 0), NVector(node.figma.size.x, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.PUSH_FROM_TOP:
-                        push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
-                        push_layer(layer, NVector(0, 0), NVector(0, node.figma.size.y), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
+                        push_layer(layer, NVector(0, 0), NVector(0, node.figma.size.y), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.PUSH_FROM_BOTTOM:
-                        push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), transition, start_frame, end_frame)
-                        push_layer(layer, NVector(0, 0), NVector(0, -node.figma.size.y), transition, start_frame, end_frame)
+                        push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
+                        push_layer(layer, NVector(0, 0), NVector(0, -node.figma.size.y), animation)
                         layers.add_under(sub_layers)
                     case _:
                         layers.add_under(sub_layers)
+
+
+def smart_animate(node: NodeItem, next_node: NodeItem, animation: AnimationArgs, layers: LayerSpan):
+    original = node.child_dict()
+
+    for child in next_node.children:
+        smart_animate_node(original, child, node.lottie.index, animation, layers)
+
+    # TODO subsequent transitions
+
+
+def smart_animate_node(original_nodes, node: NodeItem, parent_index, animation: AnimationArgs, layers: LayerSpan):
+    original = original_nodes.get(node.figma.name, None)
+    if not original or original.figma.type != node.figma.type:
+        layer = figma_to_lottie_layer(node, layers, parent_index, [], True)
+        if original:
+            animation.set(layer.transform.opacity, 0, 100)
+            animation.set(original.transform.opacity, 100, 0)
+        return
+
+    layer: objects.layers.ShapeLayer = original.lottie
+    otf = original.lottie.transform
+    tf = transform_to_lottie(node.figma.transform)[0]
+    p = tf.position.get_value(animation.start_frame)
+    if not math.isclose(p.x, otf.position.value.x) or not math.isclose(p.y, otf.position.value.y):
+        animation.set(otf.position, p, otf.position.value)
+
+    r = tf.rotation.get_value(animation.start_frame)
+    if not math.isclose(r, otf.rotation.value):
+        animation.set(otf.rotation, r, otf.rotation.value)
+
+
+    shape = layer.shapes[0].shapes[0]
+    func, type, args = shape_args(node)
+    writer = ShapePropertyWriter(node, shape)
+    if isinstance(shape, objects.shapes.Group):
+        writer.shape_wrapper = shape
+        writer.shape = shape.shapes[0]
+    func(writer, *args)
+    # TODO style
