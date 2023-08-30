@@ -252,21 +252,29 @@ class ShapeLayer(VisualLayer):
 ## @todo SIF I/O
 class ImageLayer(VisualLayer):
     _props = [
-        LottieProp("image_id", "refId", str, False),
+        LottieProp("asset_id", "refId", str, False),
     ]
     ## %Layer type.
     type = 2
 
-    def __init__(self, image_id=""):
+    def __init__(self, asset_id=""):
         super().__init__()
-        ## id pointing to the source image defined on 'assets' object
-        self.image_id = image_id
+        ## id pointing to the source asset defined on 'assets' object
+        self.asset_id = asset_id
+
+    @property
+    def image_id(self):
+        return self.asset_id
+
+    @image_id.setter
+    def image_id(self, id):
+        self.asset_id = id
 
 
 ## @ingroup Lottie
 class PreCompLayer(VisualLayer):
     _props = [
-        LottieProp("reference_id", "refId", str, False),
+        LottieProp("asset_id", "refId", str, False),
         LottieProp("time_remapping", "tm", Value, False),
         LottieProp("width", "w", int, False),
         LottieProp("height", "h", int, False),
@@ -274,16 +282,24 @@ class PreCompLayer(VisualLayer):
     ## %Layer type.
     type = 0
 
-    def __init__(self, reference_id=""):
+    def __init__(self, asset_id=""):
         super().__init__()
-        ## id pointing to the source composition defined on 'assets' object
-        self.reference_id = reference_id
+        ## id pointing to the source asset defined on 'assets' object
+        self.asset_id = asset_id
         ## Comp's Time remapping
         self.time_remapping = None
         ## Width
         self.width = 512
         ## Height
         self.height = 512
+
+    @property
+    def reference_id(self):
+        return self.asset_id
+
+    @reference_id.setter
+    def reference_id(self, id):
+        self.asset_id = id
 
 
 ColorString = LottieValueConverter(color_from_hex, color_to_hex, "Color string")
@@ -337,16 +353,14 @@ class CameraLayer(Layer):
 #ingroup Lottie
 class DataLayer(Layer):
     _props = [
-        LottieProp("type", "ty", int, False),
-        LottieProp("data_source_id", "refId", str, False),
+        LottieProp("asset_id", "refId", str, False),
     ]
     type = 15
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, asset_id=""):
+        ## id pointing to the source asset defined on 'assets' object
+        self.asset_id = asset_id
 
-        ## ID of the data source in assets
-        self.data_source_id = None
 
 
 #ingroup Lottie
@@ -369,13 +383,13 @@ class AudioLayer(Layer):
     _props = [
         LottieProp("type", "ty", int, False),
         LottieProp("audio_settings", "au", AudioSettings, False),
-        LottieProp("sound_id", "refId", str, False),
+        LottieProp("asset_id", "refId", str, False),
     ]
     type = 6
 
-    def __init__(self):
+    def __init__(self, asset_id=""):
         super().__init__()
 
         self.audio_settings = None
         ## ID of the sound as specified in the assets
-        self.sound_id = None
+        self.asset_id = asset_id
