@@ -64,7 +64,7 @@ class NodeMap:
         self.interaction_delay = 0.5
         self.paste_key = None
         self.images = {}
-        self.pending_images = {}
+        self.pending_images = []
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -143,31 +143,34 @@ class NodeMap:
         self.pending_precomp_layers = []
 
         if self.pending_images:
-            req_data = json.dumps({"sha1s": list(self.pending_images.keys())}).encode("ascii")
+            req_data = json.dumps({"sha1s": self.pending_images}).encode("ascii")
             query_url = "https://www.figma.com/file/%s/image/batch" % self.paste_key
             request = urllib.request.Request(query_url, req_data, {"Content-Type": "application/json"})
             response = urllib.request.urlopen(request)
             resp_data = json.loads(response.read())
-            for hash, url in resp_data["meta"]["s3_urls"]:
-                asset = self.pending_images[hash]
+            for hash, url in resp_data["meta"]["s3_urls"].items():
+                asset = self.images[hash]
                 asset.path = url
-                img_data = urllib.request.urlopen(url).read()
-                img = PIL.Image.open(io.BytesIO(img_data))
-                asset.width = img.width
-                asset.height = img.height
+                if asset.width == 0:
+                    img_data = urllib.request.urlopen(url).read()
+                    img = PIL.Image.open(io.BytesIO(img_data))
+                    asset.width = img.width
+                    asset.height = img.height
 
-            self.pending_images = {}
+            self.pending_images = []
 
-    def image_id(self, image: schema.Image):
-        if image.hash in self.images:
-            return self.images[image.hash]
+    def image_asset(self, image: schema.Image):
+        hex_hash = base64.b16encode(image.hash).lower().decode("ascii")
+
+        if hex_hash in self.images:
+            return self.images[hex_hash]
 
         asset = objects.assets.Image()
-        asset.id = image.hash
+        asset.id = hex_hash
         asset.name = image.name or "Image"
-        self.images[image.hash] = asset
-        hex_hash = base64.b16encode(image.hash).lower().decode("ascii")
-        self.pending_images[hex_hash] = asset
+        self.images[hex_hash] = asset
+        self.pending_images.append(hex_hash)
+        self.animation.assets.append(asset)
         return asset
 
 
@@ -239,6 +242,10 @@ def node_to_comp(canvas: NodeItem, comp: objects.composition.Composition):
                 if layer.out_point < op:
                     op = layer.out_point
 
+    if ip is None:
+        ip = 0
+        op = comp.frame_rate
+
     for layer in comp.layers:
         if layer.in_point is None:
             layer.in_point = ip
@@ -301,6 +308,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
 
     NodeType = node.map.schema.NodeType
     children = node.children
+    extra_layers = layers.span()
 
     match node.type:
         case NodeType.TEXT:
@@ -318,7 +326,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
             layer = objects.layers.PreCompLayer()
             node.map.pending_precomp_layers.append((layer, node.figma.symbolData.symbolID))
         case _:
-            shape = figma_to_lottie_shape(node)
+            shape = figma_to_lottie_shape(node, extra_layers)
             if shape is None:
                 return None
             layer = objects.layers.ShapeLayer()
@@ -328,6 +336,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     layer.name = node.figma.name
     layer.parent_index = parent_index
     layers.add_layer(layer)
+    layers.add_under(extra_layers)
 
 
     points = [
@@ -360,7 +369,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     return layer
 
 
-def figma_to_lottie_shape(node: NodeItem):
+def figma_to_lottie_shape(node: NodeItem, extra_layers: LayerSpan):
     NodeType = node.map.schema.NodeType
 
     match node.type:
@@ -389,7 +398,7 @@ def figma_to_lottie_shape(node: NodeItem):
 
     group = objects.shapes.Group()
     group.add_shape(shape)
-    shape_style_to_lottie(node, group)
+    shape_style_to_lottie(node, group, extra_layers)
     group.name = node.figma.name
 
     if node.figma.blendMode is not None:
@@ -404,7 +413,7 @@ def color_to_lottie(color: schema.Color):
     return Color(color.r, color.g, color.b, 1), color.a
 
 
-def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
+def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group, extra_layers: LayerSpan):
     if node.figma.fillPaints:
         for paint in node.figma.fillPaints:
             match paint.type:
@@ -418,6 +427,21 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group):
                     shape = objects.shapes.Fill()
                     shape.color.value, shape.opacity.value = color_to_lottie(paint.color)
                     shape.opacity.value *= 100
+                case node.map.schema.PaintType.IMAGE:
+                    image = node.map.image_asset(paint.image)
+                    image.width = paint.originalImageWidth
+                    image.height = paint.originalImageHeight
+                    image_layer = objects.layers.ImageLayer()
+                    extra_layers.add_layer(image_layer)
+                    if paint.opacity is not None:
+                        image_layer.transform.opacity.value = paint.opacity * 100
+                    image_layer.blend_mode = enum_mapping.blend_mode.to_lottie(paint.blendMode)
+                    transform_to_lottie(paint.transform, image_layer.transform)
+                    image_layer.transform.rotation.value = paint.rotation
+                    image_layer.hidden = not paint.visible
+                    image_layer.name = image.name
+                    image_layer.asset_id = image.id
+                    continue
                 case _:
                     continue
 
