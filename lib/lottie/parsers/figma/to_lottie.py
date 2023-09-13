@@ -61,9 +61,9 @@ class NodeItem:
             name = child.figma.name
             if name:
                 if name in handled:
-                   out.pop(name, None)
+                    dict.pop(name, None)
                 else:
-                    out[name] = child
+                    dict[name] = child
                     handled.add(name)
 
             child.child_dict(dict, handled)
@@ -123,8 +123,6 @@ class NodeMap:
                         interaction_index += 1
                         item.interaction_index = interaction_index
                         item.interaction_head = interaction_index
-
-                    index = item.interaction_index
 
                     for interaction in node.prototypeInteractions:
                         for action in interaction.actions:
@@ -367,7 +365,6 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     layers.add_under(extra_layers)
     node.lottie = layer
 
-
     points = [
         NVector(0, 0),
         NVector(node.figma.size.x, 0),
@@ -412,8 +409,8 @@ def shape_args(node: NodeItem):
         case NodeType.VECTOR:
             func = vector_shape_to_lottie
             type = objects.shapes.Path
-        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION  | NodeType.FRAME:
-            func = rect_shape_to_lottie
+        case NodeType.RECTANGLE | NodeType.ROUNDED_RECTANGLE | NodeType.SECTION | NodeType.FRAME:
+            func = rect_to_lottie
             type = objects.shapes.Rect
         case NodeType.REGULAR_POLYGON:
             func = polystar_to_lottie
@@ -472,14 +469,14 @@ def gradient_stops_to_lottie(node: NodeItem):
         alpha_stops.append(stop.position)
         alpha_stops.append(stop.color.a)
 
-    gradient = lottie.objects.porperties.GradientColors()
+    gradient = objects.porperties.GradientColors()
     gradient.stops = stops + alpha_stops
     gradient.count = len(node.figma.stops)
     return gradient
 
 
 def linear_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
-    shape.type = lottie.objects.shapes.GradientType.Linear
+    shape.type = objects.shapes.GradientType.Linear
     # TODO parse transform and apply it to the points
     shape.start_point = NVector(0, 0)
     shape.end_point = NVector(0, 100)
@@ -487,7 +484,7 @@ def linear_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
 
 
 def radial_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
-    shape.type = lottie.objects.shapes.GradientType.Radial
+    shape.type = objects.shapes.GradientType.Radial
     # TODO parse transform and apply it to the points
     shape.start_point = NVector(0, 0)
     shape.end_point = NVector(100, 0)
@@ -718,7 +715,7 @@ def precomp_layer(layer: objects.layers.PreCompLayer, comp: objects.assets.Preco
 
 
 def push_layer(layer, before, after, animation: AnimationArgs):
-    start_pos = layer.transform.position.get_value(start_frame)
+    start_pos = layer.transform.position.get_value(animation.start_frame)
     animation.set(layer.transform.position, start_pos + before, start_pos + after)
 
 
@@ -795,8 +792,8 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
 
             next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.parent_index, [], True)
             next_layer.transform = objects.helpers.Transform()
-            next_layer.transform.position.value = layer.transform.position.get_value(start_frame)
-            next_layer.transform.rotation.value = layer.transform.rotation.get_value(start_frame)
+            next_layer.transform.position.value = layer.transform.position.get_value(animation.start_frame)
+            next_layer.transform.rotation.value = layer.transform.rotation.get_value(animation.start_frame)
 
             if first:
                 first = False
@@ -892,7 +889,6 @@ def smart_animate_node(original_nodes, node: NodeItem, parent_index, animation: 
     r = tf.rotation.get_value(animation.start_frame)
     if not math.isclose(r, otf.rotation.value):
         animation.set(otf.rotation, r, otf.rotation.value)
-
 
     shape = layer.shapes[0].shapes[0]
     func, type, args = shape_args(node)

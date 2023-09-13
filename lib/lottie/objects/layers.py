@@ -362,7 +362,6 @@ class DataLayer(Layer):
         self.asset_id = asset_id
 
 
-
 #ingroup Lottie
 class AudioSettings(LottieObject):
     _props = [

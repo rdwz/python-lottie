@@ -20,7 +20,7 @@ class Type(enum.Enum):
 
 
 class BinStream:
-    def __init__(self, wrapped = None, endian: Endian = None):
+    def __init__(self, wrapped=None, endian: Endian = None):
         if isinstance(wrapped, bytes):
             wrapped = io.BytesIO(wrapped)
         elif wrapped is None:
@@ -36,7 +36,6 @@ class BinStream:
         f, length = self.struct_format(type, endian)
         raw = self.wrapped.read(length)
         return struct.unpack(f, raw)[0]
-
 
     def write(self, value, type: Type|str|None, endian: Endian|None = None):
         if type is None:
@@ -76,13 +75,17 @@ class BinStream:
     def __getattr__(self, name: str):
         if name.startswith("read_"):
             type, endian = self.type_from_string(name.split("_", 1)[-1])
+
             def reader():
                 return self.read(type, endian)
+
             return reader
         elif name.startswith("write_"):
             type, endian = self.type_from_string(name.split("_", 1)[-1])
+
             def writer(value):
                 return self.write(value, type, endian)
+
             return writer
 
         return super().__getattr__(name)

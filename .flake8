@@ -14,5 +14,6 @@
 # W503 line break before binary operator
 # W504 line break after binary operator
 # E721 do not compare types
-ignore = F401,F403,F405,E116,E117,E226,E261,E262,E265,E266,E731,E741,W503,W504,E241,E721
+# E227 missing whitespace around bitwise or shift operator
+ignore = F401,F403,F405,E116,E117,E226,E261,E262,E265,E266,E731,E741,W503,W504,E241,E721,E227
 max-line-length = 128
