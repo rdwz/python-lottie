@@ -461,16 +461,49 @@ def color_to_lottie(color: schema.Color):
     return Color(color.r, color.g, color.b, 1), color.a
 
 
+def gradient_stops_to_lottie(node: NodeItem):
+    stops = []
+    alpha_stops = []
+    for stop in node.figma.stops:
+        stops.append(stop.position)
+        stops.append(stop.color.r)
+        stops.append(stop.color.g)
+        stops.append(stop.color.b)
+        alpha_stops.append(stop.position)
+        alpha_stops.append(stop.color.a)
+
+    gradient = lottie.objects.porperties.GradientColors()
+    gradient.stops = stops + alpha_stops
+    gradient.count = len(node.figma.stops)
+    return gradient
+
+
+def linear_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
+    shape.type = lottie.objects.shapes.GradientType.Linear
+    # TODO parse transform and apply it to the points
+    shape.start_point = NVector(0, 0)
+    shape.end_point = NVector(0, 100)
+    shape.colors = gradient_stops_to_lottie(node)
+
+
+def radial_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
+    shape.type = lottie.objects.shapes.GradientType.Radial
+    # TODO parse transform and apply it to the points
+    shape.start_point = NVector(0, 0)
+    shape.end_point = NVector(100, 0)
+    shape.colors = gradient_stops_to_lottie(node)
+
+
 def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group, extra_layers: LayerSpan):
     if node.figma.fillPaints:
         for paint in node.figma.fillPaints:
             match paint.type:
                 case node.map.schema.PaintType.GRADIENT_LINEAR:
                     shape = objects.shapes.GradientFill()
-                    # TODO
+                    linear_gradient_to_lottie(node, shape)
                 case node.map.schema.PaintType.GRADIENT_RADIAL:
                     shape = objects.shapes.GradientFill()
-                    # TODO
+                    radial_gradient_to_lottie(node, shape)
                 case node.map.schema.PaintType.SOLID:
                     shape = objects.shapes.Fill()
                     shape.color.value, shape.opacity.value = color_to_lottie(paint.color)
@@ -512,10 +545,10 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group, extra_lay
             match paint.type:
                 case node.map.schema.PaintType.GRADIENT_LINEAR:
                     shape = objects.shapes.GradientStroke()
-                    # TODO
+                    linear_gradient_to_lottie(node, shape)
                 case node.map.schema.PaintType.GRADIENT_RADIAL:
                     shape = objects.shapes.GradientStroke()
-                    # TODO
+                    radial_gradient_to_lottie(node, shape)
                 case node.map.schema.PaintType.SOLID:
                     shape = objects.shapes.Stroke()
                     shape.color.value, shape.opacity.value = color_to_lottie(paint.color)
@@ -755,6 +788,9 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                 )
                 smart_animate(node, next_node, animation, sub_layers)
                 layers.add_over(sub_layers)
+
+                if next_node.figma.prototypeInteractions:
+                    prototype_to_lottie(next_node, layer, layers)
                 continue
 
             next_layer = figma_to_lottie_layer(next_node, sub_layers, layer.parent_index, [], True)
@@ -835,15 +871,13 @@ def smart_animate(node: NodeItem, next_node: NodeItem, animation: AnimationArgs,
     for child in next_node.children:
         smart_animate_node(original, child, node.lottie.index, animation, layers)
 
-    # TODO subsequent transitions
-
 
 def smart_animate_node(original_nodes, node: NodeItem, parent_index, animation: AnimationArgs, layers: LayerSpan):
     original = original_nodes.get(node.figma.name, None)
     if not original or original.figma.type != node.figma.type:
         layer = figma_to_lottie_layer(node, layers, parent_index, [], True)
+        animation.set(layer.transform.opacity, 0, 100)
         if original:
-            animation.set(layer.transform.opacity, 0, 100)
             animation.set(original.transform.opacity, 100, 0)
         return
 
@@ -851,6 +885,7 @@ def smart_animate_node(original_nodes, node: NodeItem, parent_index, animation: 
     otf = original.lottie.transform
     tf = transform_to_lottie(node.figma.transform)[0]
     p = tf.position.get_value(animation.start_frame)
+    node.lottie = layer
     if not math.isclose(p.x, otf.position.value.x) or not math.isclose(p.y, otf.position.value.y):
         animation.set(otf.position, p, otf.position.value)
 
