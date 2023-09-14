@@ -486,21 +486,23 @@ def gradient_stops_to_lottie(paint: schema.Paint):
     return gradient
 
 
-def linear_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient):
+def linear_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient, box: objects.shapes.BoundingBox):
     shape.gradient_type = objects.shapes.GradientType.Linear
     matrix = transform_matrix(paint.transform)
     p0 = NVector(0, 0)
-    p1 = NVector(100, 0)
+    p1 = NVector(box.height, 0)
     shape.start_point.value = matrix.apply(p0)
     shape.end_point.value = matrix.apply(p1)
     shape.colors = gradient_stops_to_lottie(paint)
 
 
-def radial_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient):
+def radial_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient, box: objects.shapes.BoundingBox):
     shape.gradient_type = objects.shapes.GradientType.Radial
-    # TODO parse transform and apply it to the points
-    shape.start_point.value = NVector(0, 0)
-    shape.end_point.value = NVector(100, 0)
+    p0 = NVector((box.x1 + box.x2) / 2, (box.y1 - box.y2) / 4)
+    p1 = NVector(0, p0.y)
+    matrix = transform_matrix(paint.transform)
+    shape.start_point.value = matrix.apply(p0)
+    shape.end_point.value = matrix.apply(p1)
     shape.colors = gradient_stops_to_lottie(paint)
 
 
@@ -510,10 +512,10 @@ def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group, extra_lay
             match paint.type:
                 case node.map.schema.PaintType.GRADIENT_LINEAR | node.map.schema.PaintType.GRADIENT_ANGULAR:
                     shape = objects.shapes.GradientFill()
-                    linear_gradient_to_lottie(paint, shape)
+                    linear_gradient_to_lottie(paint, shape, group.bounding_box())
                 case node.map.schema.PaintType.GRADIENT_RADIAL | node.map.schema.PaintType.GRADIENT_DIAMOND:
                     shape = objects.shapes.GradientFill()
-                    radial_gradient_to_lottie(paint, shape)
+                    radial_gradient_to_lottie(paint, shape, group.bounding_box())
                 case node.map.schema.PaintType.SOLID:
                     shape = objects.shapes.Fill()
                     shape.color.value, shape.opacity.value = color_to_lottie(paint.color)
