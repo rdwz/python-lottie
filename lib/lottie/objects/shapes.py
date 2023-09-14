@@ -67,6 +67,12 @@ class BoundingBox:
     def size(self):
         return NVector(self.width, self.height)
 
+    def offset(self, point):
+        self.x1 += point.x
+        self.y1 += point.y
+        self.x2 += point.x
+        self.y2 += point.y
+
 
 ## @ingroup Lottie
 class ShapeElement(VisualObject):
