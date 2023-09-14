@@ -25,10 +25,21 @@ def transform_to_lottie(obj: schema.Matrix, transform=None):
         transform.position.value = NVector(obj.m02, obj.m12)
         angle = math.asin(obj.m01)
         transform.rotation.value = -angle * 180 / math.pi
-        matrix.rotate(angle)
+        matrix.rotate(-angle)
         matrix.translate(transform.position.value)
 
     return transform, matrix
+
+
+def transform_matrix(obj: schema.Matrix):
+    matrix = TransformMatrix()
+    matrix.a = obj.m00
+    matrix.b = obj.m01
+    matrix.c = obj.m10
+    matrix.d = obj.m11
+    matrix.tx = obj.m02
+    matrix.ty = obj.m12
+    return matrix
 
 
 class NodeItem:
@@ -458,10 +469,10 @@ def color_to_lottie(color: schema.Color):
     return Color(color.r, color.g, color.b, 1), color.a
 
 
-def gradient_stops_to_lottie(node: NodeItem):
+def gradient_stops_to_lottie(paint: schema.Paint):
     stops = []
     alpha_stops = []
-    for stop in node.figma.stops:
+    for stop in paint.stops:
         stops.append(stop.position)
         stops.append(stop.color.r)
         stops.append(stop.color.g)
@@ -469,38 +480,40 @@ def gradient_stops_to_lottie(node: NodeItem):
         alpha_stops.append(stop.position)
         alpha_stops.append(stop.color.a)
 
-    gradient = objects.porperties.GradientColors()
-    gradient.stops = stops + alpha_stops
-    gradient.count = len(node.figma.stops)
+    gradient = objects.properties.GradientColors()
+    gradient.colors.value = stops + alpha_stops
+    gradient.count = len(paint.stops)
     return gradient
 
 
-def linear_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
-    shape.type = objects.shapes.GradientType.Linear
-    # TODO parse transform and apply it to the points
-    shape.start_point = NVector(0, 0)
-    shape.end_point = NVector(0, 100)
-    shape.colors = gradient_stops_to_lottie(node)
+def linear_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient):
+    shape.gradient_type = objects.shapes.GradientType.Linear
+    matrix = transform_matrix(paint.transform)
+    p0 = NVector(0, 0)
+    p1 = NVector(100, 0)
+    shape.start_point.value = matrix.apply(p0)
+    shape.end_point.value = matrix.apply(p1)
+    shape.colors = gradient_stops_to_lottie(paint)
 
 
-def radial_gradient_to_lottie(node: NodeItem, shape: objects.shapes.Gradient):
-    shape.type = objects.shapes.GradientType.Radial
+def radial_gradient_to_lottie(paint: schema.Paint, shape: objects.shapes.Gradient):
+    shape.gradient_type = objects.shapes.GradientType.Radial
     # TODO parse transform and apply it to the points
-    shape.start_point = NVector(0, 0)
-    shape.end_point = NVector(100, 0)
-    shape.colors = gradient_stops_to_lottie(node)
+    shape.start_point.value = NVector(0, 0)
+    shape.end_point.value = NVector(100, 0)
+    shape.colors = gradient_stops_to_lottie(paint)
 
 
 def shape_style_to_lottie(node: NodeItem, group: objects.shapes.Group, extra_layers: LayerSpan):
     if node.figma.fillPaints:
         for paint in node.figma.fillPaints:
             match paint.type:
-                case node.map.schema.PaintType.GRADIENT_LINEAR:
+                case node.map.schema.PaintType.GRADIENT_LINEAR | node.map.schema.PaintType.GRADIENT_ANGULAR:
                     shape = objects.shapes.GradientFill()
-                    linear_gradient_to_lottie(node, shape)
-                case node.map.schema.PaintType.GRADIENT_RADIAL:
+                    linear_gradient_to_lottie(paint, shape)
+                case node.map.schema.PaintType.GRADIENT_RADIAL | node.map.schema.PaintType.GRADIENT_DIAMOND:
                     shape = objects.shapes.GradientFill()
-                    radial_gradient_to_lottie(node, shape)
+                    radial_gradient_to_lottie(paint, shape)
                 case node.map.schema.PaintType.SOLID:
                     shape = objects.shapes.Fill()
                     shape.color.value, shape.opacity.value = color_to_lottie(paint.color)
@@ -626,7 +639,7 @@ class ShapePropertyWriter:
 def ellipse_to_lottie(node: ShapePropertyWriter):
     size = vector_to_lottie(node.figma.size)
     node.set("size", size)
-    node.set("position", size)
+    node.set("position", size / 2)
 
 
 def rect_to_lottie(node: ShapePropertyWriter):
