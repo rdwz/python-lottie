@@ -734,6 +734,30 @@ def push_layer(layer, before, after, animation: AnimationArgs):
     animation.set(layer.transform.position, start_pos + before, start_pos + after)
 
 
+def slide_layer_out(layer, before, after, animation: AnimationArgs):
+    start_pos = layer.transform.position.get_value(animation.start_frame)
+    start_scale = layer.transform.scale.get_value(animation.start_frame)
+    start_opacity = layer.transform.opacity.get_value(animation.start_frame)
+    animation.set(layer.transform.position, start_pos + before, start_pos + after)
+    animation.set(layer.transform.opacity, start_opacity, start_opacity / 4)
+    if after.x != 0:
+        end_scale = NVector(start_scale.x / 4, start_scale.y)
+    else:
+        end_scale = NVector(start_scale.x, start_scale.y / 4)
+    animation.set(layer.transform.scale, start_scale, end_scale)
+
+
+def slide_layer_in(layer, before, after, animation: AnimationArgs):
+    start_pos = layer.transform.position.get_value(animation.start_frame)
+    animation.set(layer.transform.position, start_pos + before, start_pos + after)
+    animation.set(layer.transform.opacity, 25, 100)
+    if before.x != 0:
+        start_scale = NVector(25, 100)
+    else:
+        start_scale = NVector(100, 25)
+    animation.set(layer.transform.scale, start_scale, NVector(100, 100))
+
+
 def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: LayerSpan):
     # Avoid loops
     if node.interaction_rendered:
@@ -833,28 +857,28 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                         layer.transform.opacity.add_keyframe(animation.start_frame, 100, animation.transition)
                         layer.transform.opacity.add_keyframe(animation.end_frame, 0)
                         layers.add_under(sub_layers)
-                    case TransitionType.MOVE_FROM_RIGHT | TransitionType.SLIDE_FROM_RIGHT:
+                    case TransitionType.MOVE_FROM_RIGHT:
                         push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
-                    case TransitionType.MOVE_FROM_LEFT | TransitionType.SLIDE_FROM_LEFT:
+                    case TransitionType.MOVE_FROM_LEFT:
                         push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
-                    case TransitionType.MOVE_FROM_TOP | TransitionType.SLIDE_FROM_TOP:
+                    case TransitionType.MOVE_FROM_TOP:
                         push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
-                    case TransitionType.MOVE_FROM_BOTTOM | TransitionType.SLIDE_FROM_BOTTOM:
+                    case TransitionType.MOVE_FROM_BOTTOM:
                         push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
                         layers.add_over(sub_layers)
-                    case TransitionType.MOVE_OUT_TO_RIGHT | TransitionType.SLIDE_OUT_TO_RIGHT:
+                    case TransitionType.MOVE_OUT_TO_RIGHT:
                         push_layer(layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
-                    case TransitionType.MOVE_OUT_TO_LEFT | TransitionType.SLIDE_OUT_TO_LEFT:
+                    case TransitionType.MOVE_OUT_TO_LEFT:
                         push_layer(layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
-                    case TransitionType.MOVE_OUT_TO_TOP | TransitionType.SLIDE_OUT_TO_TOP:
+                    case TransitionType.MOVE_OUT_TO_TOP:
                         push_layer(layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
-                    case TransitionType.MOVE_OUT_TO_BOTTOM | TransitionType.SLIDE_OUT_TO_BOTTOM:
+                    case TransitionType.MOVE_OUT_TO_BOTTOM:
                         push_layer(layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case TransitionType.PUSH_FROM_RIGHT:
@@ -872,6 +896,38 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                     case TransitionType.PUSH_FROM_BOTTOM:
                         push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
                         push_layer(layer, NVector(0, 0), NVector(0, -node.figma.size.y), animation)
+                        layers.add_under(sub_layers)
+                    case TransitionType.SLIDE_FROM_RIGHT:
+                        slide_layer_out(layer, NVector(0, 0), NVector(-node.figma.size.x / 4, 0), animation)
+                        push_layer(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
+                        layers.add_over(sub_layers)
+                    case TransitionType.SLIDE_FROM_LEFT:
+                        slide_layer_out(layer, NVector(0, 0), NVector(node.figma.size.x, 0), animation)
+                        push_layer(next_layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
+                        layers.add_over(sub_layers)
+                    case TransitionType.SLIDE_FROM_TOP:
+                        slide_layer_out(layer, NVector(0, 0), NVector(0, node.figma.size.y), animation)
+                        push_layer(next_layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
+                        layers.add_over(sub_layers)
+                    case TransitionType.SLIDE_FROM_BOTTOM:
+                        slide_layer_out(layer, NVector(0, 0), NVector(0, -node.figma.size.y / 4), animation)
+                        push_layer(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
+                        layers.add_over(sub_layers)
+                    case TransitionType.SLIDE_OUT_TO_RIGHT:
+                        push_layer(layer, NVector(-node.figma.size.x, 0), NVector(0, 0), animation)
+                        slide_layer_in(next_layer, NVector(-node.figma.size.x/4, 0), NVector(0, 0), animation)
+                        layers.add_under(sub_layers)
+                    case TransitionType.SLIDE_OUT_TO_LEFT:
+                        push_layer(layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
+                        slide_layer_in(next_layer, NVector(node.figma.size.x, 0), NVector(0, 0), animation)
+                        layers.add_under(sub_layers)
+                    case TransitionType.SLIDE_OUT_TO_TOP:
+                        push_layer(layer, NVector(0, -node.figma.size.y), NVector(0, 0), animation)
+                        slide_layer_in(next_layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
+                        layers.add_under(sub_layers)
+                    case TransitionType.SLIDE_OUT_TO_BOTTOM:
+                        push_layer(layer, NVector(0, node.figma.size.y), NVector(0, 0), animation)
+                        slide_layer_in(next_layer, NVector(0, -node.figma.size.y / 4), NVector(0, 0), animation)
                         layers.add_under(sub_layers)
                     case _:
                         layers.add_under(sub_layers)
