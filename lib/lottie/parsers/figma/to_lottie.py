@@ -96,6 +96,7 @@ class NodeMap:
         self.images = {}
         self.pending_images = []
         self.file = file
+        self.fonts = set()
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -205,6 +206,17 @@ class NodeMap:
         else:
             self.pending_images.append(hex_hash)
         return asset
+
+
+    def add_font(self, font: schema.FontName):
+        if font.postscript not in self.fonts:
+            lottie_font = objects.text.Font()
+            lottie_font.font_family = font.family
+            lottie_font.font_style = font.style
+            lottie_font.name = font.postscript
+            self.animation.fonts.list.append(lottie_font)
+            self.fonts.add(lottie_font.name)
+        return font.postscript
 
 
 def figma_file_to_lottie(file: FigmaFile):
@@ -349,8 +361,7 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
 
     match node.type:
         case NodeType.TEXT:
-            layer = objects.layers.TextLayer()
-            # TODO
+            layer = text_to_lottie(node)
         case NodeType.MEDIA:
             layer = objects.layers.ImageLayer()
             # TODO
@@ -404,6 +415,33 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
         prototype_to_lottie(node, layer, layers)
 
     return layer
+
+
+def text_to_lottie(node: NodeItem):
+    layer = objects.layers.TextLayer()
+    node.map.add_font(node.figma.fontName)
+    doc = objects.text.TextDocument()
+    doc.font_size = node.figma.fontSize
+    doc.justify = node.figma.textAlignHorizontal
+    doc.line_height = node.figma.lineHeight
+    doc.text = node.figma.textData.characters
+    doc.tracking = node.figma.textTracking
+    doc.stroke_width = node.figma.strokeWeight or 0
+
+    if node.figma.fillPaints:
+        for fill in node.figma.fillPaints:
+            if fill.type == node.map.schema.PaintType.SOLID:
+                doc.fill_color = color_to_lottie(fill.color)
+                break
+
+    if node.figma.strokePaints:
+        for stroke in node.figma.strokePaints:
+            if stroke.type == node.map.schema.PaintType.SOLID:
+                doc.stroke_color = color_to_lottie(stroke.color)
+                break
+
+    return layer
+
 
 
 def shape_args(node: NodeItem):
@@ -847,7 +885,6 @@ def prototype_to_lottie(node: NodeItem, layer: objects.layers.Layer, layers: Lay
                     )
                 )
 
-                # TODO SLIDE IN/OUT
                 match action.transitionType:
                     case TransitionType.INSTANT_TRANSITION:
                         layer.transform.opacity.add_keyframe(animation.start_frame, 100, objects.easing.Hold())

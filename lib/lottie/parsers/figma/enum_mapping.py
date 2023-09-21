@@ -42,3 +42,10 @@ class EnumMapping:
 blend_mode = EnumMapping(schema.BlendMode.PASS_THROUGH, objects.shapes.BlendMode.Normal)
 line_cap = EnumMapping(schema.StrokeCap.NONE, objects.shapes.LineCap.Butt)
 line_join = EnumMapping(schema.StrokeJoin.MITER, objects.shapes.LineJoin.Miter)
+
+text_align = EnumMapping(schema.TextAlignHorizontal.LEFT, objects.text.TextJustify.Left)
+text_align.f2l_mapping[schema.TextAlignHorizontal.JUSTIFIED] = objects.text.TextJustify.JustifyWithLastLineFull
+for tj in objects.text.TextJustify:
+    if tj.name.startswith("Justify"):
+         text_align.l2f_mapping[tj] = schema.TextAlignHorizontal.JUSTIFIED
+
