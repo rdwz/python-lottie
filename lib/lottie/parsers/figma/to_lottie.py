@@ -53,6 +53,7 @@ class NodeItem:
         self.interaction_index = None
         self.interaction_head = None
         self.interaction_rendered = False
+        self.contains_masks = False
 
     @property
     def type(self):
@@ -62,6 +63,8 @@ class NodeItem:
         self.parent = parent
         if parent:
             bisect.insort(parent.children, self, key=lambda it: it.figma.parentIndex.position)
+            if self.figma.mask:
+                parent.contains_masks = True
 
     def child_dict(self, dict=None, handled=None):
         if dict is None:
@@ -97,6 +100,7 @@ class NodeMap:
         self.pending_images = []
         self.file = file
         self.fonts = set()
+        self.pending_masks = []
 
     def node(self, id: schema.GUID, add_missing=True):
         id = self.id(id)
@@ -206,7 +210,6 @@ class NodeMap:
         else:
             self.pending_images.append(hex_hash)
         return asset
-
 
     def add_font(self, font: schema.FontName):
         if font.postscript not in self.fonts:
@@ -387,6 +390,12 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
     layers.add_under(extra_layers)
     node.lottie = layer
 
+    if node.figma.mask:
+        node.map.pending_masks.append((
+            layer, enum_mapping.matte_mode.to_lottie(node.figma.maskType),
+
+        ))
+
     points = [
         NVector(0, 0),
         NVector(node.figma.size.x, 0),
@@ -396,8 +405,43 @@ def figma_to_lottie_layer(node: NodeItem, layers: LayerSpan, parent_index, bound
 
     sub_layers = layers.span()
 
-    for child in children:
-        figma_to_lottie_layer(child, sub_layers, layer.index, points, False)
+    if node.contains_masks:
+        mask_groups = []
+        current_group = []
+        for child in reversed(children):
+            current_group.insert(0, child)
+            if child.figma.mask:
+                mask_groups.insert(0, current_group)
+                current_group = []
+
+        if current_group:
+            current_group.insert(0, None)
+            mask_groups.insert(0, current_group)
+
+        for group in mask_groups:
+            mask_layers = sub_layers.span()
+            target = None
+            mode = None
+
+            if group[0]:
+                target = figma_to_lottie_layer(group[0], sub_layers, layer.index, points, False)
+                if target:
+                    target.matte_target = True
+                    mode = enum_mapping.matte_mode.to_lottie(group[0].figma.maskType)
+
+            mask_points = [] if target else points
+            for child in group[1:]:
+                source = figma_to_lottie_layer(child, mask_layers, layer.index, mask_points, False)
+                if target:
+                    source.matte_mode = mode
+                    source.matte_parent = target.index
+
+            sub_layers.add_under(mask_layers)
+
+            pass
+    else:
+        for child in children:
+            figma_to_lottie_layer(child, sub_layers, layer.index, points, False)
 
     if node.type == NodeType.FRAME:
         layers.add_over(sub_layers)
@@ -441,7 +485,6 @@ def text_to_lottie(node: NodeItem):
                 break
 
     return layer
-
 
 
 def shape_args(node: NodeItem):

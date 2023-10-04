@@ -90,7 +90,7 @@ class VisualLayer(Layer):
         LottieProp("blend_mode", "bm", BlendMode, False),
 
         LottieProp("matte_mode", "tt", MatteMode, False),
-        LottieProp("matte_target", "td", int, False),
+        LottieProp("matte_target", "td", PseudoBool, False),
         LottieProp("matte_parent", "tp", int, False),
         LottieProp("css_class", "cl", str, False),
         LottieProp("layer_xml_id", "ln", str, False),

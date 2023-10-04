@@ -11,8 +11,13 @@ class EnumMapping:
         self.lottie_enum = type(lottie_default)
         self.f2l_mapping = self.l2f_mapping = None
         if mapping:
-            self.l2f_mapping = dict(mapping)
-            self.f2l_mapping = {v: k for k, v in mapping}
+            self.l2f_mapping = {}
+            self.f2l_mapping = {}
+            for f, l in mapping:
+                if l not in self.l2f_mapping:
+                    self.l2f_mapping[l] = f
+                if f not in self.f2l_mapping:
+                    self.f2l_mapping[f] = l
 
     def to_figma(self, value):
         if value is None:
@@ -43,9 +48,20 @@ blend_mode = EnumMapping(schema.BlendMode.PASS_THROUGH, objects.shapes.BlendMode
 line_cap = EnumMapping(schema.StrokeCap.NONE, objects.shapes.LineCap.Butt)
 line_join = EnumMapping(schema.StrokeJoin.MITER, objects.shapes.LineJoin.Miter)
 
-text_align = EnumMapping(schema.TextAlignHorizontal.LEFT, objects.text.TextJustify.Left)
-text_align.f2l_mapping[schema.TextAlignHorizontal.JUSTIFIED] = objects.text.TextJustify.JustifyWithLastLineFull
-for tj in objects.text.TextJustify:
-    if tj.name.startswith("Justify"):
-         text_align.l2f_mapping[tj] = schema.TextAlignHorizontal.JUSTIFIED
+text_align = EnumMapping(schema.TextAlignHorizontal.LEFT, objects.text.TextJustify.Left, [
+    (schema.TextAlignHorizontal.LEFT, objects.text.TextJustify.Left),
+    (schema.TextAlignHorizontal.RIGHT, objects.text.TextJustify.Right),
+    (schema.TextAlignHorizontal.CENTER, objects.text.TextJustify.Center),
+    (schema.TextAlignHorizontal.JUSTIFIED, objects.text.TextJustify.JustifyWithLastLineFull),
+    (schema.TextAlignHorizontal.JUSTIFIED, objects.text.TextJustify.JustifyWithLastLineLeft),
+    (schema.TextAlignHorizontal.JUSTIFIED, objects.text.TextJustify.JustifyWithLastLineRight),
+])
 
+
+matte_mode = EnumMapping(schema.MaskType.ALPHA, objects.layers.MatteMode.Alpha, [
+    (schema.MaskType.ALPHA, objects.layers.MatteMode.Alpha),
+    (schema.MaskType.ALPHA, objects.layers.MatteMode.Normal),
+    (schema.MaskType.OUTLINE, objects.layers.MatteMode.InvertedAlpha),
+    (schema.MaskType.LUMINANCE, objects.layers.MatteMode.Luma),
+    (schema.MaskType.LUMINANCE, objects.layers.MatteMode.InvertedLuma),
+])
