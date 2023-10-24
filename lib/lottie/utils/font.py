@@ -408,9 +408,13 @@ class Font:
     def glyph(self, glyph_name):
         if isinstance(self.wrapped, fontTools.ttLib.TTFont):
             glyph = self.glyphset[glyph_name]
-            table = self.glyphset.glyfTable[glyph_name]
-            xmin = getattr(table, "xMin", glyph.lsb)
-            xmax = getattr(table, "xMax", glyph.width)
+            if hasattr(self.glyphset, "glyfTable"):
+                table = self.glyphset.glyfTable[glyph_name]
+                xmin = getattr(table, "xMin", glyph.lsb)
+                xmax = getattr(table, "xMax", glyph.width)
+            else:
+                xmin = glyph.lsb
+                xmax = glyph.width
             return GlyphMetrics(glyph, glyph.lsb, glyph.width, xmin, xmax)
         elif isinstance(self.wrapped, fontTools.t1Lib.T1Font):
             glyph = self.glyphset[glyph_name]
