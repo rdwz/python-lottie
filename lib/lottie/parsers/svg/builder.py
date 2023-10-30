@@ -262,7 +262,7 @@ class SvgBuilder(SvgHandler, restructure.AbstractBuilder):
             xmlid = self.set_clean_id(img, asset.id)
             self._assets[asset.id] = xmlid
             if asset.is_embedded:
-                url = asset.image
+                url = asset.file_name
             else:
                 url = asset.path + asset.file_name
             img.attrib[self.qualified("xlink", "href")] = url
