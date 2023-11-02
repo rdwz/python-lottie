@@ -197,11 +197,11 @@ class Animation(Composition, VisualObject):
         self.layers = [precomp_layer]
         return precomp
 
-    def scale(self, width, height):
+    def scale(self, width, height, force=False):
         """!
         Scales the animation so it fits in width/height
         """
-        if self.width != width or self.height != height:
+        if force or self.width != width or self.height != height:
             self.to_precomp()
 
             scale = min(width/self.width, height/self.height)
