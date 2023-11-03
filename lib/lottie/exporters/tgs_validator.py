@@ -142,9 +142,9 @@ class TgsValidator(ObjectVisitor):
         )
         self._check(
             o.matte_mode in {None, layers.MatteMode.Normal},
-            "Mattes are not supported",
+            "Mattes are not officially supported",
             o,
-            Severity.Warning
+            Severity.Note
         )
 
     def _visit_precomplayer(self, o: layers.PreCompLayer):
