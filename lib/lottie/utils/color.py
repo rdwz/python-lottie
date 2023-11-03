@@ -397,8 +397,8 @@ class Color(NVector):
         return self.converted(ColorMode.RGB)
 
     def __repr__(self):
-        return "<%s %s [%.3f, %.3f, %.3f, %.3f]>" % (
-            (self.__class__.__name__, self.mode.name) + tuple(self.components)
+        return "<%s %s [%s]>" % (
+            (self.__class__.__name__, self.mode.name, ", ".join("%.3f" % c for c in self.components))
         )
 
     def component_names(self):

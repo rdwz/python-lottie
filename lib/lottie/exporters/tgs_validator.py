@@ -105,7 +105,7 @@ class TgsValidator(ObjectVisitor):
 
     def _visit_layer(self, o: layers.Layer):
         self._check(
-            not o.has_masks and not o.masks,
+            not getattr(o, "has_masks", None) and not o.masks,
             "Masks are not officially supported",
             o,
             Severity.Note
