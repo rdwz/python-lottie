@@ -221,7 +221,7 @@ class LottieObjectMeta(type):
     def __new__(cls, name, bases, attr):
         props = []
         for base in bases:
-            if type(base) == cls:
+            if type(base) is cls:
                 props += base._props
         attr["_props"] = props + attr.get("_props", [])
         return super().__new__(cls, name, bases, attr)
