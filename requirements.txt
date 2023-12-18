@@ -12,7 +12,7 @@ grapheme
 
 # Video exporters
 opencv-python
-numpy>=1.20.0
+numpy
 
 # GUI scripts
 PyQt5
