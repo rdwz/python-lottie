@@ -153,7 +153,7 @@ class SifNodeMeta(type):
     def __new__(cls, name, bases, attr):
         props = []
         for base in bases:
-            if type(base) == cls:
+            if type(base) is cls:
                 props += base._nodes
         attr["_nodes"] = props + attr.get("_nodes", [])
         if "_tag" not in attr:
