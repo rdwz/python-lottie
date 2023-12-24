@@ -248,6 +248,9 @@ class SvgParser(SvgHandler):
             _, _, animation.width, animation.height = self._parse_viewbox(svg.attrib["viewBox"])
         animation.name = self._get_name(svg, self.qualified("sodipodi", "docname"))
 
+        for defs in svg.findall(".//{*}defs") + svg.findall(".//defs"):
+            self.parse_defs(defs)
+
         if layer_frames:
             for frame in svg:
                 if self.unqualified(frame.tag) == "g":
@@ -661,7 +664,7 @@ class SvgParser(SvgHandler):
             return out
         return None
 
-    def _parse_defs(self, element):
+    def parse_defs(self, element):
         self.parse_children(element, self.defs, {})
 
     def _apply_transform_element_to_matrix(self, matrix, t):

@@ -10,6 +10,7 @@
  * `add_keyframe()` will no longer set the old-fashioned `end` value unless you pass `end=True`
  * Renamed keyframe `.start` to `.value` (the old name will still work)
  * Fixed SVG export with embedded image assets
+ * Fixed parsing SVG where `<defs>` appears after being referenced
 
 ## 0.7.0 - 2022-09-11
  * Improved color management
