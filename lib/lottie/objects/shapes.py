@@ -872,17 +872,19 @@ class ZigZag(ShapeElement):
         LottieProp("amplitude", "s", Value, False),
         LottieProp("point_type", "pt", Value, False),
     ]
+    ## %Shape type.
+    type = "zz"
 
     def __init__(self):
         super().__init__()
 
         self.shape_type = "zz"
         ## Number of ridges per segment
-        self.frequency = None
+        self.frequency = Value(0)
         ## Distance between peaks and troughs
-        self.amplitude = None
+        self.amplitude = Value(0)
         ## Point type (1 = corner, 2 = smooth)
-        self.point_type = None
+        self.point_type = Value(1)
 
 
 #ingroup Lottie
